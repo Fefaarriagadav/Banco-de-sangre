@@ -5,7 +5,7 @@ from pantalla_principal import mostrar_principal
 pantalla = ctk.CTk()
 pantalla.title("Banco de sangre")
 ctk.set_default_color_theme("blue") # color de los botones
-pantalla.attributes("-fullscreen", True)
+pantalla.state("zoomed")
 
 # iniciar sesión
 frame_login = ctk.CTkFrame(pantalla)
