@@ -3,11 +3,13 @@ from datetime import date
 import math
 import re
 import sqlite3
+from datos.configuracion import RUTA_BD
 from datetime import datetime
 
 def mostrar_registro(pantalla, rol):
     if rol != "Entrevistador":
-        mensaje_error.configure(text="No tiene autorización para registrar donantes",text_color="red")
+        from tkinter import messagebox
+        messagebox.showerror("Acceso denegado", "No tiene autorización para registrar donantes")
         return
     frame_donante = ctk.CTkFrame(pantalla)
     frame_donante.place(relx=0,rely=0,relheight=1, relwidth=1)
@@ -187,7 +189,7 @@ def mostrar_registro(pantalla, rol):
         
         fecha_nacimiento_sql = fecha_de_nacimiento.isoformat()
 
-        conexion = sqlite3.connect("BancoDeSangre.db")
+        conexion = sqlite3.connect(RUTA_BD)
         cursor = conexion.cursor()
 
         cursor.execute("""INSERT INTO DONANTES (NOMBRE, APELLIDO, EDAD, SEXO, GRUPO_SANGUINEO, FACTOR_RH, FECHA_ULTIMA_DONACION, PESO, EMAIL, ELEGIBLE, FECHA_DE_NACIMIENTO)
@@ -206,7 +208,7 @@ def mostrar_registro(pantalla, rol):
             titulo = ctk.CTkLabel(frame_confirmacion,text="¡Donante registrado correctamente!",font=("Arial", 26, "bold"))
             titulo.pack(pady=30)
 
-            datos = ctk.CTkLabel(frame_confirmacion,text=f"Donante N° {id_donante}\n"f"Edad: {edad} años\n"f"Elegibilidad: {elegibilidad}\n"
+            datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_donante}\n"f"Edad: {edad} años\n"f"Elegibilidad: {elegibilidad}\n"
             f"Tipo de sangre: {tipo_sangre}",font=("Arial", 18),justify="left")
             datos.pack(pady=20)
 

@@ -2,5 +2,6 @@
 .venv_antiguo/
 __pycache__/
 *.pyc
-*.db
 .env
+*.db
+*.db-journal
