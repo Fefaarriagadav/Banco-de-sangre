@@ -3,7 +3,7 @@ import unicodedata
 from contextlib import contextmanager
 from datos.configuracion import RUTA_BD
 
-RESULTADOS = ("Apto", "No apto")
+RESULTADOS = ("Donante apto", "Donante NO apto temporalmente", "Donante NO apto PERMANENTEMENTE")
 
 
 @contextmanager
@@ -18,14 +18,6 @@ def conectar(ruta=RUTA_BD):
         conexion.close()
 
 
-def preparar_elegibilidad(ruta=RUTA_BD):
-    with conectar(ruta) as conexion:
-        conexion.execute("""CREATE TABLE IF NOT EXISTS EVALUACIONES_ELEGIBILIDAD (
-            DONANTE_ID INTEGER PRIMARY KEY REFERENCES DONANTES(ID),
-            RESULTADO TEXT NOT NULL CHECK (RESULTADO IN ('Apto', 'No apto'))
-        )""")
-
-
 def validar_id(valor):
     texto = str(valor).strip()
     if not texto.isascii() or not texto.isdecimal() or int(texto) <= 0:
@@ -36,10 +28,7 @@ def validar_id(valor):
 def consultar_donante(donante_id, ruta=RUTA_BD):
     donante_id = validar_id(donante_id)
     with conectar(ruta) as conexion:
-        fila = conexion.execute("""SELECT d.ID, d.NOMBRE, d.APELLIDO,
-            e.RESULTADO FROM DONANTES d
-            LEFT JOIN EVALUACIONES_ELEGIBILIDAD e ON e.DONANTE_ID = d.ID
-            WHERE d.ID = ?""", (donante_id,)).fetchone()
+        fila = conexion.execute("""SELECT ID, NOMBRE, APELLIDO, ELEGIBLE AS RESULTADO FROM DONANTES WHERE ID = ? """, (donante_id,)).fetchone()
     if fila is None:
         raise ValueError("No existe un donante con ese ID.")
     return dict(fila)
@@ -80,7 +69,4 @@ def guardar_resultado(donante_id, resultado, empleado_id, ruta=RUTA_BD):
             raise ValueError("Seleccione Apto o No apto.")
         if conexion.execute("SELECT ID FROM DONANTES WHERE ID = ?", (donante_id,)).fetchone() is None:
             raise ValueError("No existe un donante con ese ID.")
-        conexion.execute("""INSERT INTO EVALUACIONES_ELEGIBILIDAD
-            (DONANTE_ID, RESULTADO) VALUES (?, ?)
-            ON CONFLICT(DONANTE_ID) DO UPDATE SET RESULTADO = excluded.RESULTADO""",
-            (donante_id, resultado))
+        conexion.execute(""" UPDATE DONANTES SET ELEGIBLE = ? WHERE ID = ? """, (resultado, donante_id))

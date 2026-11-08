@@ -1,6 +1,7 @@
 import customtkinter as ctk #bibliteca de interfaz grafica
 from pantallas.agregar_donante import mostrar_registro
 from pantallas.evaluar_donante import mostrar_evaluacion
+from pantallas.pedir_donaciones import mostrar_pedir_donaciones
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id): #ventana principal una vez ya se haya ingresado sesión
     #se divide en frames para hacer mas facil el trabajo de cambio de pantallas y los clicks 
@@ -29,6 +30,9 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id): #ventana principal un
         boton_donante = ctk.CTkButton(menu_lateral, text="Agregar nuevo donante", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_registro(frame_contenido,rol))
         boton_donante.place(x=20, y=40)
         ctk.CTkButton(menu_lateral, text="Registrar resultado médico", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=100)
+
+    boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
+    boton_pedir_donaciones.place(x=20, y=160)
 
     #la tarjeta de bienvenida se crea en el frame de contenido, se crea un recuadro donde trabajar esta tarjeta
     #se crea el titulo y donde se posiciona y lo mismo con el rol, el nombre y el rol se exraen de la base de datos

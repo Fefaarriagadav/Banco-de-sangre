@@ -3,12 +3,10 @@ import sqlite3
 from pantallas.principal import mostrar_principal
 from datos.configuracion import RUTA_BD
 from datos.basededatos import inicializar_base
-from servicios.elegibilidad import preparar_elegibilidad
 
 
 def iniciar_app():
     inicializar_base()
-    preparar_elegibilidad()
     #se crea la primera ventana, donde se debe inciiar sesión
     pantalla = ctk.CTk()
     pantalla.title("Banco de sangre") #titulo que lleva arriba de todo
