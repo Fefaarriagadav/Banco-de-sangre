@@ -6,6 +6,8 @@ import sqlite3
 from datos.configuracion import RUTA_BD
 from datetime import datetime
 
+from servicios.elegibilidad import consultar_donante, FORMATO_FECHA
+
 def mostrar_adonacion(pantalla, rol):
     if rol != "Entrevistador": #por ahora el personal es entrevistador, deveria ser enfermero
         from tkinter import messagebox
@@ -49,6 +51,15 @@ def mostrar_adonacion(pantalla, rol):
         if not litros_ingresados.replace('.', '', 1).isdigit():
             mensaje_error.configure(text="Los litros deben ser un número")
             return
+        try: # donante existe
+            consultar_donante(id_ingresado)
+        except ValueError as e:
+            mensaje_error.configure(text=str(e))
+            return
+        if consultar_donante(id_ingresado)["ELEGIBLE"] != "Donante apto":
+            mensaje_error.configure(text="El donante no es elegible para donar")
+            return
+        
        
         fecha_extraccion_sql = date.today().isoformat()
         fecha_vencimiento_sql = (date.today().replace(day=date.today().day + 20)).isoformat()
