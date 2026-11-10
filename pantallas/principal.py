@@ -2,10 +2,12 @@ import customtkinter as ctk #bibliteca de interfaz grafica
 from pantallas.agregar_donante import mostrar_registro
 from pantallas.evaluar_donante import mostrar_evaluacion
 from pantallas.pedir_donaciones import mostrar_pedir_donaciones
+from pantallas.agregar_donacion import mostrar_adonacion
+
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
     #se divide en frames para hacer mas facil el trabajo de cambio de pantallas y los clicks 
-    frame_principal = ctk.CTkFrame(pantalla) #una nueva ventana ne la pantalla
+    frame_principal = ctk.CTkFrame(pantalla) #una nueva ventana en la pantalla
     frame_principal.place(relx=0,rely=0,relheight=1, relwidth=1) #donde se veera en la pantalla principal
 
     frame_contenido = ctk.CTkFrame(frame_principal, fg_color="transparent") #frame ocntenido, es generica ya que la puedo ocupar para un formulario de donantes como una nueva donación
@@ -33,6 +35,10 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
 
     boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
     boton_pedir_donaciones.place(x=20, y=160)
+
+    if rol == "Entrevistador": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
+            boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
+            boton_donancion.place(x=20, y=280)
 
     def cerrar_sesion():
         frame_principal.destroy()
