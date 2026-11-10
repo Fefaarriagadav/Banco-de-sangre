@@ -62,7 +62,6 @@ def _leer_fecha(texto, nombre):
 
 def validar_periodo(inicio, fin, hoy=None):
     # Verifica que la restricción temporal tenga un rango coherente y vigente.
-    """Valida el período de una inhabilitación temporal y lo devuelve en formato ISO."""
     hoy = hoy or date.today()
     fecha_inicio = _leer_fecha(inicio, "inicial")
     fecha_fin = _leer_fecha(fin, "final")
@@ -116,7 +115,7 @@ def candidato_vigente(donante_id, grupo, rh, ruta=RUTA_BD, hoy=None):
 
 
 def buscar_donantes(texto, ruta=RUTA_BD):
-    # Busca donantes por nombre, apellido o email sin distinguir tildes ni mayúsculas.
+    # Busca donantes por nombre, apellido o email sin distinguir tildes ni mayúsculas(se implemento, pero no se usa en la interfaz).
     palabras = texto.strip().split()
     if not palabras:
         raise ValueError("Ingrese nombre, apellido o correo del donante.")
