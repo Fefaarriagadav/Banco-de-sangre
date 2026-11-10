@@ -142,7 +142,7 @@ def mostrar_pedir_donaciones(pantalla):
         
         ids_encontrados = [donante[0] for donante in donantes_encontrados]
         try:
-            cursor = conexion.cursor()
+            
             candidatos_vigentes = []
             for donante_id in ids_encontrados:
                 fila = candidato_vigente(donante_id, filtros_buscados[0], filtros_buscados[1])
