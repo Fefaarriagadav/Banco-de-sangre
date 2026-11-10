@@ -29,7 +29,7 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id): #ventana principal un
     if rol == "Entrevistador": # solo el perosnal que tenga el rol asigando de entrevistador tiene el boton de agregar donante, y cuando se aprieta llama a la función mostrar_registro que esta en otro archivo por eso se importa
         boton_donante = ctk.CTkButton(menu_lateral, text="Agregar nuevo donante", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_registro(frame_contenido,rol))
         boton_donante.place(x=20, y=40)
-        ctk.CTkButton(menu_lateral, text="Registrar resultado médico", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=100)
+        ctk.CTkButton(menu_lateral, text="Actualizar habilitación", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=100)
 
     boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
     boton_pedir_donaciones.place(x=20, y=160)
