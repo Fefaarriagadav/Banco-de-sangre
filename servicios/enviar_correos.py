@@ -12,10 +12,8 @@ correo = os.getenv("CORREO_REMITENTE")
 contrasena = os.getenv("CONTRASENA_APP")
 
 def enviar_correo(destinatario):
-
+    # Crear el mensaje de correo
     mensaje = EmailMessage()
-
-
     mensaje["From"] = correo
     mensaje["To"] = destinatario
     mensaje["Subject"] = "Necesitamos tu ayuda - Banco de Sangre"

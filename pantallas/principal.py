@@ -3,7 +3,7 @@ from pantallas.agregar_donante import mostrar_registro
 from pantallas.evaluar_donante import mostrar_evaluacion
 from pantallas.pedir_donaciones import mostrar_pedir_donaciones
 
-def mostrar_principal(pantalla, nombre, rol, empleado_id): #ventana principal una vez ya se haya ingresado sesión
+def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
     #se divide en frames para hacer mas facil el trabajo de cambio de pantallas y los clicks 
     frame_principal = ctk.CTkFrame(pantalla) #una nueva ventana ne la pantalla
     frame_principal.place(relx=0,rely=0,relheight=1, relwidth=1) #donde se veera en la pantalla principal
@@ -33,6 +33,13 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id): #ventana principal un
 
     boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
     boton_pedir_donaciones.place(x=20, y=160)
+
+    def cerrar_sesion():
+        frame_principal.destroy()
+        volver_login()
+
+    boton_cerrar_sesion = ctk.CTkButton(menu_lateral, text="Cerrar sesión", width=210, height=45, text_color="#FFFFFF", fg_color="#FF0000", command=cerrar_sesion)
+    boton_cerrar_sesion.place(x=20, y=655)
 
     #la tarjeta de bienvenida se crea en el frame de contenido, se crea un recuadro donde trabajar esta tarjeta
     #se crea el titulo y donde se posiciona y lo mismo con el rol, el nombre y el rol se exraen de la base de datos
