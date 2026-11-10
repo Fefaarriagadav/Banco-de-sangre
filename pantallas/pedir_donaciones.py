@@ -2,6 +2,7 @@ import customtkinter as ctk
 import sqlite3
 from datos.configuracion import RUTA_BD
 from servicios.enviar_correos import enviar_correo
+from servicios.elegibilidad import buscar_candidatos, candidato_vigente
 
 def mostrar_pedir_donaciones(pantalla):
     #se crea un frame que contiene todos los elementos de la pantalla de pedir donaciones
@@ -91,13 +92,8 @@ def mostrar_pedir_donaciones(pantalla):
         mostrar_mensaje("")
         rh_bd = "+" if rh_seleccionado == "Positivo" else "-"
         try:
-            conexion = sqlite3.connect(RUTA_BD)
-            try:
-                cursor = conexion.cursor()
-                cursor.execute("""SELECT ID, GRUPO_SANGUINEO, FACTOR_RH, EMAIL FROM DONANTES WHERE GRUPO_SANGUINEO = ? AND FACTOR_RH = ? AND ELEGIBLE = 'Donante apto' """, (ts_seleccionado, rh_bd))
-                donantes_encontrados = cursor.fetchall()
-            finally:
-                conexion.close()
+            # Excluye a quienes tienen una restricción vigente (temporal o permanente).
+            donantes_encontrados = buscar_candidatos(ts_seleccionado, rh_bd)
         except sqlite3.Error:
             mostrar_mensaje("No se pudo consultar la base de datos.")
             return
@@ -147,18 +143,13 @@ def mostrar_pedir_donaciones(pantalla):
         
         ids_encontrados = [donante[0] for donante in donantes_encontrados]
         try:
-            conexion = sqlite3.connect(RUTA_BD)
-            #se conecta a la base de datos y se verifica que los donantes encontrados sigan siendo elegibles para donar sangre
-            try:
-                cursor = conexion.cursor()
-                candidatos_vigentes = []
-                for donante_id in ids_encontrados:
-                    cursor.execute("""SELECT ID, EMAIL FROM DONANTES WHERE ID = ? AND GRUPO_SANGUINEO = ? AND FACTOR_RH = ? AND ELEGIBLE = 'Donante apto' """, (donante_id, filtros_buscados[0],filtros_buscados[1]))
-                    fila = cursor.fetchone()
-                    if fila is not None and fila[1]:
-                        candidatos_vigentes.append(fila)
-            finally:
-                conexion.close()
+            cursor = conexion.cursor()
+            candidatos_vigentes = []
+            for donante_id in ids_encontrados:
+                fila = candidato_vigente(donante_id, filtros_buscados[0], filtros_buscados[1])
+                if fila is not None and fila[1]:
+                    candidatos_vigentes.append(fila)
+
         except sqlite3.Error:
             mostrar_mensaje("No se pudo verificar la elegibilidad.")
             return

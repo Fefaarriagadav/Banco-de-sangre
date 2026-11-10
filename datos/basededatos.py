@@ -2,8 +2,8 @@ import sqlite3
 from datos.configuracion import RUTA_BD
 
 
-def inicializar_base():
-    conexion = sqlite3.connect(RUTA_BD) # conecta con la base de datos "bancoDeSangre" (si no existe, la crea)
+def inicializar_base(ruta=RUTA_BD):
+    conexion = sqlite3.connect(ruta) # conecta con la base de datos "bancoDeSangre" (si no existe, la crea)
     cursor = conexion.cursor()
     
     def existencia_tabla(nombre_tabla):
@@ -23,5 +23,22 @@ def inicializar_base():
     tabla_donaciones = existencia_tabla("DONACIONES") # verifica si la tabla "donaciones" existe, si no, la crea
     tabla_personal = existencia_tabla("PERSONAL") # verifica si la tabla "personal" existe, si no, la crea
     
+    # H4: período de inhabilitación temporal e historial de cambios
+    # agrega las columnas solo si aún no existen (no borra datos).
+    columnas = [fila[1] for fila in cursor.execute("PRAGMA table_info(DONANTES)")]
+    if "INHABILITACION_INICIO" not in columnas:
+        cursor.execute("ALTER TABLE DONANTES ADD COLUMN INHABILITACION_INICIO TEXT")
+    if "INHABILITACION_FIN" not in columnas:
+        cursor.execute("ALTER TABLE DONANTES ADD COLUMN INHABILITACION_FIN TEXT")
+    cursor.execute('''CREATE TABLE IF NOT EXISTS HISTORIAL_HABILITACION (
+        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        DONANTE_ID INTEGER NOT NULL REFERENCES DONANTES(ID),
+        ESTADO_ANTERIOR TEXT,
+        ESTADO_NUEVO TEXT NOT NULL,
+        FECHA_INICIO TEXT,
+        FECHA_FIN TEXT,
+        EMPLEADO_ID INTEGER NOT NULL REFERENCES PERSONAL(ID_EMPLEADO),
+        FECHA_CAMBIO TEXT NOT NULL)''')
+
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos
