@@ -19,6 +19,15 @@ def iniciar_app():
     #caja de texto donde se debe ingresar el id
     caja_id = ctk.CTkEntry(frame_login, placeholder_text= "Ingrese su ID", height = 80, width = 300, font =("Arial", 30))
     caja_id.place(relx=0.5, rely=0.4, anchor="center") #donde se posiciona la caja de id en la pantalla
+    caja_id.bind("<Return>", lambda event: inciar_sesion()) #cuando se apreta enter llama a la función de iniciar sesión
+
+    def volver_login():
+        caja_id.delete(0, "end")
+        mensaje.configure(text="")
+        frame_login.place(relx=0, rely=0, relwidth=1, relheight=1)
+        frame_login.lift()
+        caja_id.focus_set()
+
     mensaje = ctk.CTkLabel(frame_login, text="", text_color="#000000", height = 80, width = 280, font=("Arial", 30)) #estructura del mensaje
     mensaje.place(relx=0.5, rely= 0.3,anchor = "center") #donde se veera el mensaje
     
@@ -37,7 +46,7 @@ def iniciar_app():
     
         if resultado is not None: # si encontro el id, cierra la pagina de iniciar seisón y pasa a la pantalla principal
             frame_login.place_forget()
-            mostrar_principal(pantalla, nombre, rol, id_ingresado)
+            mostrar_principal(pantalla, nombre, rol, id_ingresado, volver_login)
             mensaje.configure(text="Bienvenido, Personal Autorizado")
             
         else: #en caso que la base de datos no encuentre el id ingresado genera un mensaje de id invalido
