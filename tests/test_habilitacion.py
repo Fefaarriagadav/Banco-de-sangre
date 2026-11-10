@@ -10,7 +10,7 @@ HOY = date.today()
 
 class PruebasH4(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp()
+        self.dir = tempfile.mkdtemp(dir=os.path.dirname(os.path.abspath(__file__)))
         self.bd = os.path.join(self.dir, "t.db")
         inicializar_base(self.bd)
         c = sqlite3.connect(self.bd)
@@ -58,8 +58,8 @@ class PruebasH4(unittest.TestCase):
             with self.assertRaises(ValueError, msg=(ini, fin)):
                 self.guardar(e.TEMPORAL, ini, fin)
             self.assertEqual(self.estado(), (e.APTO, None, None))
-        c = sqlite3.connect(self.bd)
-        self.assertEqual(c.execute("SELECT COUNT(*) FROM HISTORIAL_HABILITACION").fetchone()[0], 0)
+        with e.conectar(self.bd) as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM HISTORIAL_HABILITACION").fetchone()[0], 0)
 
     def test_inicio_igual_a_fin_es_valido(self):
         self.guardar(e.TEMPORAL, F(HOY), F(HOY))
@@ -104,17 +104,20 @@ class PruebasH4(unittest.TestCase):
     def test_historial(self):
         self.guardar(e.TEMPORAL, F(HOY), F(HOY + timedelta(days=3)))
         self.guardar(e.APTO)
-        c = sqlite3.connect(self.bd)
-        filas = c.execute("SELECT ESTADO_ANTERIOR, ESTADO_NUEVO, EMPLEADO_ID FROM HISTORIAL_HABILITACION ORDER BY ID").fetchall()
+        with e.conectar(self.bd) as c:
+            filas = [tuple(fila) for fila in c.execute("SELECT ESTADO_ANTERIOR, ESTADO_NUEVO, EMPLEADO_ID FROM HISTORIAL_HABILITACION ORDER BY ID").fetchall()]
         self.assertEqual(filas, [(e.APTO, e.TEMPORAL, 1), (e.TEMPORAL, e.APTO, 1)])
 
     def test_migracion_sobre_base_real_no_pierde_datos(self):
         real = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "BancoDeSangre.db")
         copia = os.path.join(self.dir, "real.db"); shutil.copy(real, copia)
-        n = lambda: sqlite3.connect(copia).execute("SELECT COUNT(*) FROM DONANTES").fetchone()[0]
+        def n():
+            with e.conectar(copia) as c:
+                return c.execute("SELECT COUNT(*) FROM DONANTES").fetchone()[0]
         antes = n(); inicializar_base(copia); inicializar_base(copia)  # idempotente
         self.assertEqual(antes, n())
-        cols = [r[1] for r in sqlite3.connect(copia).execute("PRAGMA table_info(DONANTES)")]
+        with e.conectar(copia) as c:
+            cols = [r[1] for r in c.execute("PRAGMA table_info(DONANTES)")]
         self.assertIn("INHABILITACION_FIN", cols)
 
 

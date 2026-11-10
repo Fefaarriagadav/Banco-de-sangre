@@ -5,6 +5,7 @@ from servicios.enviar_correos import enviar_correo
 from servicios.elegibilidad import buscar_candidatos, candidato_vigente
 
 def mostrar_pedir_donaciones(pantalla):
+    #se crea un frame que contiene todos los elementos de la pantalla de pedir donaciones
     frame_filtro = ctk.CTkFrame(pantalla)
     frame_filtro.place(relx=0, rely=0, relwidth=1, relheight=1)
     titulo = ctk.CTkLabel(frame_filtro,text="Filtro de donantes",font=("Arial", 30, "bold"),text_color="#000000")
@@ -34,6 +35,7 @@ def mostrar_pedir_donaciones(pantalla):
     mensaje_error.place(relx=0.5, rely=0.47, anchor="center")
 
     temporizador_mensaje = None
+    # Función para mostrar un mensaje temporal en la pantalla
     def mostrar_mensaje(texto, color="#DC2626"):
         nonlocal temporizador_mensaje
 
@@ -46,6 +48,7 @@ def mostrar_pedir_donaciones(pantalla):
         if texto:
             temporizador_mensaje = frame_filtro.after(5000,lambda: mensaje_error.configure(text=""))
 
+    #muestra los resultados de la busqueda en un frame scrollable
     frame_resultados = ctk.CTkScrollableFrame(frame_filtro,label_text="Donantes encontrados")
     frame_resultados.place(relx=0.5,rely=0.50,anchor="n",relwidth=0.6,relheight=0.30)
 
@@ -59,6 +62,7 @@ def mostrar_pedir_donaciones(pantalla):
     filtros_buscados = None
 
     def limpiar_resultados():
+        #en caso de que se cambien los filtros, se limpian los resultados y se deshabilita el boton de enviar correo
         nonlocal donantes_encontrados, filtros_buscados
 
         donantes_encontrados = []
@@ -75,6 +79,7 @@ def mostrar_pedir_donaciones(pantalla):
         mostrar_mensaje("")
 
     def buscar_donantes():
+        #se buscan los donantes en la base de datos segun los filtros seleccionados y se muestran en el frame de resultados
         nonlocal donantes_encontrados, filtros_buscados
 
         limpiar_resultados()
@@ -121,7 +126,7 @@ def mostrar_pedir_donaciones(pantalla):
         mostrar_mensaje("")
 
     def mandar_correos():
-
+    #se envían correos a los donantes encontrados, pero antes se verifica que sigan siendo elegibles y que los filtros no hayan cambiado
         if not donantes_encontrados:
             mostrar_mensaje(
                 "No hay donantes para enviar correos."
@@ -137,6 +142,7 @@ def mostrar_pedir_donaciones(pantalla):
         
         ids_encontrados = [donante[0] for donante in donantes_encontrados]
         try:
+            
             candidatos_vigentes = []
             for donante_id in ids_encontrados:
                 fila = candidato_vigente(donante_id, filtros_buscados[0], filtros_buscados[1])
@@ -155,6 +161,7 @@ def mostrar_pedir_donaciones(pantalla):
             mostrar_mensaje("No hay destinatarios válidos.")
             return
         
+        #se crea una ventana de confirmación antes de enviar los correos
         ventana_confirmacion = ctk.CTkToplevel(frame_filtro)
         ventana_confirmacion.title("Confirmar envío")
         ancho = 420
@@ -172,6 +179,7 @@ def mostrar_pedir_donaciones(pantalla):
         mensaje_confirmacion.pack(pady=(30, 20))
 
         def confirmar_envio():
+        #se envían los correos a los donantes y se muestra un mensaje con el resultado
             ventana_confirmacion.destroy()
             boton_correo.configure(state="disabled")
 
