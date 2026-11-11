@@ -7,7 +7,7 @@ import re
 import sqlite3
 from datos.configuracion import RUTA_BD
 
-from servicios.elegibilidad import buscar_candidatos, consultar_donante, FORMATO_FECHA, consultar_donanteApto
+from servicios.elegibilidad import buscar_candidatos, consultar_donante, FORMATO_FECHA, consultar_donanteApto, consultar_donanteSangre
 
 def mostrar_adonacion(pantalla, rol):
     if rol != "Enfermero": #por ahora el personal es entrevistador, deveria ser enfermero
@@ -66,7 +66,8 @@ def mostrar_adonacion(pantalla, rol):
             mensaje_error.configure(text=str(e))
             return
         
-       
+        rh_donacion = consultar_donanteSangre(id_ingresado)["FACTOR_RH"]
+        tipo_donacion = consultar_donanteSangre(id_ingresado)["GRUPO_SANGUINEO"]
         fecha_extraccion_sql = date.today().isoformat()
         fecha_vencimiento = date.today() + timedelta(days=14)
         fecha_vencimiento_sql = fecha_vencimiento.isoformat()
@@ -77,8 +78,8 @@ def mostrar_adonacion(pantalla, rol):
         cursor = conexion.cursor()
 
 
-        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO)
-            VALUES (?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql))
+        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, TIPO_SANGRE, FACTOR_RH)
+            VALUES (?, ?, ?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql, tipo_donacion, rh_donacion))
 
         id_donacion = cursor.lastrowid
         conexion.commit()
@@ -92,7 +93,7 @@ def mostrar_adonacion(pantalla, rol):
             titulo = ctk.CTkLabel(frame_confirmacion,text="¡Donancion registrada correctamente!",font=("Arial", 26, "bold"))
             titulo.pack(pady=30)
 
-            datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_ingresado}\n"f"ID de donacion: {id_donacion}\n"f"CC: {cc_ingresados}\n"f"Fecha: {fecha_extraccion_sql}\n"f"Fecha a vencer: {fecha_vencimiento_sql}",font=("Arial", 18),justify="left")
+            datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_ingresado}\n"f"ID de donacion: {id_donacion}\n"f"CC: {cc_ingresados}\n"f"Fecha: {fecha_extraccion_sql}\n"f"Fecha a vencer: {fecha_vencimiento_sql}\n"f"Rh: {rh_donacion}\n"f"Grupo: {tipo_donacion}",font=("Arial", 18),justify="left")
             datos.pack(pady=20)
         mostrar_confirmacion(id_ingresado,cc_ingresados,fecha_extraccion_sql)
 

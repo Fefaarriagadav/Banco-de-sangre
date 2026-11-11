@@ -48,8 +48,17 @@ def consultar_donante(donante_id, ruta=RUTA_BD):
         raise ValueError("No existe un donante con ese ID.")
     return dict(fila)
 
-def consultar_donanteApto(donante_id, ruta=RUTA_BD, hoy=None):
+def consultar_donanteSangre(donante_id, ruta=RUTA_BD): #nose si puedo modificar esta función, pero la agregue una copia para poder obtener el grupo sanguineo y el factor rh del donante - oliver/ricardp
     # Recupera la información básica del donante para mostrarla en la interfaz.
+    donante_id = validar_id(donante_id)
+    with conectar(ruta) as conexion:
+        fila = conexion.execute("""SELECT ID, NOMBRE, APELLIDO, ELEGIBLE AS RESULTADO, INHABILITACION_INICIO AS INICIO, FACTOR_RH, GRUPO_SANGUINEO, INHABILITACION_FIN AS FIN FROM DONANTES WHERE ID = ? """, (donante_id,)).fetchone()
+    if fila is None:
+        raise ValueError("No existe un donante con ese ID.")
+    return dict(fila)
+
+def consultar_donanteApto(donante_id, ruta=RUTA_BD, hoy=None):
+    # Consulta si el donante sigue siendo apto para donar (sin restricciones vigentes).
     donante_id = validar_id(donante_id)
     hoy = hoy or date.today().isoformat()
     with conectar(ruta) as conexion:
