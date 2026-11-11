@@ -211,9 +211,88 @@ migración y actualización automática.
 
 ### H6-T2: Alertas y stock en la ventana principal
 
-La ventana principal muestra:
-- Stock total disponible en unidades y litros.
-- Unidades disponibles próximas a expirar, identificadas por ID,
-  grupo sanguíneo, factor Rh y fecha de vencimiento.
-- Cantidad de unidades pendientes de revisión.
+#### Funcionalidades implementadas
+
+La ventana principal incluye un panel lateral derecho con:
+- Título "Próximos a expirar".
+- Lista desplazable de unidades disponibles próximas a vencer.
+- Identificador de unidad, grupo sanguíneo, factor Rh y vencimiento.
+- Indicaciones "Vence hoy", "Vence mañana" o "En N días".
 - Fecha y hora de la última actualización.
+- Botón para actualizar manualmente.
+
+Las alertas se ordenan por vencimiento, mostrando primero las unidades
+que requieren atención más pronto.
+
+La sección "Stocks", accesible desde el menú lateral, incluye:
+- Totales disponibles para los ocho grupos sanguíneos y factores Rh.
+- Cantidad de unidades y litros por grupo/Rh.
+- Próximo vencimiento de cada grupo/Rh.
+- Detalle de unidades con fechas de extracción y vencimiento.
+- Tablas con desplazamiento y actualización manual y automática.
+
+#### Reglas de disponibilidad y alertas
+
+Cada registro de DONACIONES representa una unidad del modelo actual.
+
+La ventana de alerta inicial es de 7 días, configurable mediante
+DIAS_ALERTA en servicios/vencimientos.py. Incluye hoy y el séptimo
+día.
+
+El stock disponible excluye:
+- Unidades vencidas, usadas, descartadas o reservadas.
+- Registros con fechas ausentes, inválidas o inconsistentes.
+- Extracciones futuras.
+- Cantidades ausentes, no positivas o no finitas.
+
+H6 conserva los datos originales inconsistentes para su revisión.
+Los registros revisables se identifican como "Pendiente de revisión".
+
+La fecha de vencimiento permanece vigente durante todo ese día.
+La unidad pasa a Vencida a partir del día siguiente, según
+la zona horaria America/Santiago.
+
+La vida útil inicial de 20 días corresponde a la regla provisional
+heredada del proyecto. Debe validarse.
+
+#### Actualización automática
+
+Los vencimientos se actualizan:
+- Al iniciar la aplicación.
+- Al detectar un cambio de día mientras está abierta.
+- Antes de consultar el resumen o el detalle de stock.
+
+Las vistas de H6 se refrescan al mostrarse y al cambiar el minuto,
+además de permitir actualización manual.
+
+No se ejecutan procesos con la aplicación cerrada.
+Al volver a abrirla se actualizan los vencimientos pendientes.
+
+El archivo scripts/actualizar_vencimientos.bat permite ejecutar
+manualmente el proceso sin abrir la interfaz. No instala una
+tarea programada en Windows.
+
+Se agregó tzdata a las dependencias para disponer de la zona horaria
+America/Santiago en Windows.
+
+La inicialización agrega los elementos de H6 a la base existente
+sin borrar las donaciones. Respaldar la base antes de integrar cambios.
+
+#### Integración con H7
+
+H7 debe obtener el stock vigente mediante el servicio de H6:
+
+```python
+from servicios.vencimientos import consultar_stock_detallado
+
+datos = consultar_stock_detallado()
+
+for total in datos["totales"]:
+    grupo = total["grupo"]
+    rh = total["rh"]
+    unidades = total["unidades"]
+    litros = total["litros"]
+    proximo_vencimiento = total["proximo_vencimiento"]
+```
+
+.
