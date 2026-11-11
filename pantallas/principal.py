@@ -1,6 +1,7 @@
 import customtkinter as ctk #bibliteca de interfaz grafica
 from pantallas.agregar_donante import mostrar_registro
 from pantallas.evaluar_donante import mostrar_evaluacion
+from pantallas.lista_donaciones import mostrar_lista_donaciones
 from pantallas.pedir_donaciones import mostrar_pedir_donaciones
 from pantallas.agregar_donacion import mostrar_adonacion
 
@@ -39,6 +40,9 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     if rol == "Entrevistador": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
             boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
             boton_donancion.place(x=20, y=280)
+
+    boton_lista_donaciones = ctk.CTkButton(menu_lateral, text="Lista de donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_lista_donaciones(frame_contenido))
+    boton_lista_donaciones.place(x=20, y=330)
 
     def cerrar_sesion():
         frame_principal.destroy()

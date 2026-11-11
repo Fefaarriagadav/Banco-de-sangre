@@ -56,9 +56,6 @@ def mostrar_adonacion(pantalla, rol):
         except ValueError as e:
             mensaje_error.configure(text=str(e))
             return
-        if consultar_donante(id_ingresado)["ELEGIBLE"] != "Donante apto":
-            mensaje_error.configure(text="El donante no es elegible para donar")
-            return
         
        
         fecha_extraccion_sql = date.today().isoformat()
@@ -69,8 +66,9 @@ def mostrar_adonacion(pantalla, rol):
         conexion = sqlite3.connect(RUTA_BD)
         cursor = conexion.cursor()
 
+
         cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO)
-            VALUES (?, ?, ?,?)""", (id_ingresado, litros_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql))
+            VALUES (?, ?, ?, ?)""", (id_ingresado, litros_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql))
 
         id_donacion = cursor.lastrowid
         conexion.commit()
