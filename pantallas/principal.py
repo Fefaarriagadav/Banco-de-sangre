@@ -4,6 +4,8 @@ from pantallas.evaluar_donante import mostrar_evaluacion
 from pantallas.lista_donaciones import mostrar_lista_donaciones
 from pantallas.pedir_donaciones import mostrar_pedir_donaciones
 from pantallas.agregar_donacion import mostrar_adonacion
+from pantallas.panel_vencimientos import mostrar_panel_vencimientos
+from pantallas.stocks import mostrar_stocks
 
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
@@ -13,7 +15,6 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
 
     frame_contenido = ctk.CTkFrame(frame_principal, fg_color="transparent") #frame ocntenido, es generica ya que la puedo ocupar para un formulario de donantes como una nueva donación
     frame_contenido.place(relx=0 ,rely=0.08 ,relwidth= 1, relheight= 0.92)
-
 
     menu_lateral = ctk.CTkFrame(frame_principal, width=250, corner_radius=0, fg_color="#E0E0E0")
     #el menu lateral se crea aparte ya que puede estar en todos los frames
@@ -54,12 +55,33 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     #la tarjeta de bienvenida se crea en el frame de contenido, se crea un recuadro donde trabajar esta tarjeta
     #se crea el titulo y donde se posiciona y lo mismo con el rol, el nombre y el rol se exraen de la base de datos
     tarjeta_bienvenida = ctk.CTkFrame(frame_contenido,width=600, height=250, corner_radius=20,fg_color= "#FFFFFF")
-    tarjeta_bienvenida.place(relx=0.5, rely=0.25, anchor = "center")
+    tarjeta_bienvenida.place(
+        relx=0.36,
+        rely=0.25,
+        anchor="center",
+    )
     titulo = ctk.CTkLabel(tarjeta_bienvenida, text="Banco de Sangre", font=("Arial", 30, "bold"), text_color="#000000")
     titulo_nombre = ctk.CTkLabel(tarjeta_bienvenida, text=f"¡Bienvenid@, {nombre}!", font=("Arial", 30, "bold"), text_color="#000000")
     titulo_rol = ctk.CTkLabel(tarjeta_bienvenida, text=f"Rol : {rol}", font=("Arial", 30, "bold"), text_color="#000000")
     titulo.place(relx=0.5,rely=0.2, anchor = "center")
     titulo_nombre.place(relx=0.5, rely=0.5, anchor ="center")
     titulo_rol.place(relx=0.5, rely=0.8, anchor="center")
+
+    # H6-T2: resumen y alertas en la ventana principal.
+    mostrar_panel_vencimientos(frame_contenido)
+    def abrir_stocks():
+        mostrar_stocks(frame_contenido)
+        menu_lateral.place_forget()
+
+    boton_stocks = ctk.CTkButton(
+        menu_lateral,
+        text="Stocks",
+        width=210,
+        height=45,
+        text_color="#FFFFFF",
+        fg_color="#0D9488",
+        command=abrir_stocks,
+    )
+    boton_stocks.place(x=20, y=390)
 
     boton_menu.lift()

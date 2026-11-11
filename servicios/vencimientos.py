@@ -1,5 +1,4 @@
-"""H6: vencimientos, alertas y stock de unidades de sangre."""
-
+import math
 import argparse
 import re
 import sqlite3
@@ -10,7 +9,7 @@ from zoneinfo import ZoneInfo
 from datos.configuracion import RUTA_BD
 
 VIDA_UTIL_DIAS = 20
-
+DIAS_ALERTA = 7
 ZONA_HORARIA = "America/Santiago"
 INTERVALO_COMPROBACION_MS = 60_000
 
@@ -28,10 +27,10 @@ def conectar(ruta=RUTA_BD):
 
     try:
         with conexion:
+            conexion.execute("BEGIN IMMEDIATE")
             yield conexion
     finally:
         conexion.close()
-
 
 def fecha_actual(ahora=None): #Obtenemos fecha de Concepción
     if ahora is None:
@@ -126,7 +125,12 @@ def _actualizar(conexion, hoy):
 
     unidades = conexion.execute(
         """
-        SELECT ID, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, ESTADO
+        SELECT
+            ID,
+            FECHA_EXTRACCIÓN,
+            FECHA_VENCIMIENTO,
+            CANTIDAD,
+            ESTADO
         FROM DONACIONES
         """
     ).fetchall()
@@ -142,32 +146,49 @@ def _actualizar(conexion, hoy):
     for unidad in unidades:
         anterior = unidad["ESTADO"]
 
-        # Estos estados no deben reactivarse automáticamente.
+        # H6 no reactiva estados terminales.
         if anterior in (USADA, DESCARTADA, VENCIDA):
             continue
 
         try:
             extraccion = validar_fecha(
-                unidad["FECHA_EXTRACCIÓN"], "%Y-%m-%d"
+                unidad["FECHA_EXTRACCIÓN"],
+                "%Y-%m-%d",
             )
             vencimiento = validar_fecha(
-                unidad["FECHA_VENCIMIENTO"], "%Y-%m-%d"
+                unidad["FECHA_VENCIMIENTO"],
+                "%Y-%m-%d",
             )
 
             if vencimiento < extraccion:
                 raise ValueError(
-                    "El vencimiento es anterior a la extracción."
+                    "Vencimiento anterior a la extracción."
                 )
 
-            # Sigue vigente durante todo el día de vencimiento.
-            nuevo_estado = (
-                VENCIDA if vencimiento < hoy else DISPONIBLE
-            )
-        except ValueError:
+            # Una unidad caducada debe salir de circulación,
+            # aunque tenga otros datos inconsistentes.
+            if vencimiento < hoy:
+                nuevo_estado = VENCIDA
+            else:
+                if extraccion > hoy:
+                    raise ValueError(
+                        "La extracción está en el futuro."
+                    )
+
+                cantidad = float(unidad["CANTIDAD"])
+
+                if not math.isfinite(cantidad) or cantidad <= 0:
+                    raise ValueError(
+                        "La cantidad debe ser positiva y finita."
+                    )
+
+                nuevo_estado = DISPONIBLE
+
+        except (ValueError, TypeError, OverflowError):
             nuevo_estado = PENDIENTE
 
-        # Conserva reservas u otros estados incorporados por H5/H7,
-        # salvo cuando una fecha válida indica que ya vencieron.
+        # Conserva reservas y otros estados de H7 mientras
+        # no corresponda marcar la unidad como vencida.
         if (
             anterior not in estados_revisables
             and nuevo_estado != VENCIDA
@@ -176,10 +197,14 @@ def _actualizar(conexion, hoy):
 
         if nuevo_estado != anterior:
             conexion.execute(
-                "UPDATE DONACIONES SET ESTADO = ? WHERE ID = ?",
-                (nuevo_estado, unidad["ID"]),
+                """
+                UPDATE DONACIONES
+                SET ESTADO = ?
+                WHERE ID = ?
+                  AND ESTADO IS ?
+                """,
+                (nuevo_estado, unidad["ID"], anterior),
             )
-
 
 def actualizar_vencimientos(ruta=RUTA_BD, ahora=None):
     #Marca unidades vencidas sin necesitar una consulta de pantalla.
@@ -275,6 +300,143 @@ def guardar_vencimiento(
             (vencimiento.isoformat(), nuevo_estado, unidad_id),
         )
 
+def consultar_resumen(
+    ruta=RUTA_BD,
+    ahora=None,
+    dias_alerta=DIAS_ALERTA,
+):
+    """Actualiza caducidad y devuelve stock y alertas vigentes."""
+    if (
+        not isinstance(dias_alerta, int)
+        or isinstance(dias_alerta, bool)
+        or dias_alerta < 0
+    ):
+        raise ValueError(
+            "La anticipación debe ser un número entero no negativo."
+        )
+
+    hoy = fecha_actual(ahora)
+    limite_alerta = hoy + timedelta(days=dias_alerta)
+
+    with conectar(ruta) as conexion:
+        _actualizar(conexion, hoy)
+
+        stock = conexion.execute(
+            """
+            SELECT COUNT(*), COALESCE(SUM(CANTIDAD), 0)
+            FROM DONACIONES
+            WHERE ESTADO = ?
+              AND FECHA_VENCIMIENTO >= ?
+            """,
+            (DISPONIBLE, hoy.isoformat()),
+        ).fetchone()
+
+        proximas = conexion.execute(
+            """
+            SELECT
+                u.ID,
+                COALESCE(
+                    u.TIPO_SANGRE, d.GRUPO_SANGUINEO, '?'
+                ) AS GRUPO,
+                COALESCE(u.FACTOR_RH, d.FACTOR_RH, '?') AS RH,
+                u.FECHA_VENCIMIENTO,
+                u.CANTIDAD
+            FROM DONACIONES AS u
+            LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
+            WHERE u.ESTADO = ?
+              AND u.FECHA_VENCIMIENTO BETWEEN ? AND ?
+            ORDER BY u.FECHA_VENCIMIENTO, u.ID
+            """,
+            (
+                DISPONIBLE,
+                hoy.isoformat(),
+                limite_alerta.isoformat(),
+            ),
+        ).fetchall()
+
+        pendientes = conexion.execute(
+            """
+            SELECT COUNT(*)
+            FROM DONACIONES
+            WHERE ESTADO = ?
+            """,
+            (PENDIENTE,),
+        ).fetchone()[0]
+
+        return {
+            "unidades": stock[0],
+            "litros": stock[1],
+            "proximas": [dict(fila) for fila in proximas],
+            "pendientes": pendientes,
+        }
+
+def consultar_stock_detallado(ruta=RUTA_BD, ahora=None):
+    """Devuelve unidades disponibles y totales por grupo sanguíneo."""
+    hoy = fecha_actual(ahora)
+
+    with conectar(ruta) as conexion:
+        _actualizar(conexion, hoy)
+
+        filas = conexion.execute(
+            """
+            SELECT
+                u.ID,
+                COALESCE(
+                    u.TIPO_SANGRE, d.GRUPO_SANGUINEO, '?'
+                ) AS GRUPO,
+                COALESCE(u.FACTOR_RH, d.FACTOR_RH, '?') AS RH,
+                u.CANTIDAD,
+                u.FECHA_EXTRACCIÓN AS EXTRACCION,
+                u.FECHA_VENCIMIENTO AS VENCIMIENTO
+            FROM DONACIONES AS u
+            LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
+            WHERE u.ESTADO = ?
+              AND u.FECHA_VENCIMIENTO >= ?
+            ORDER BY GRUPO, RH, u.FECHA_VENCIMIENTO, u.ID
+            """,
+            (DISPONIBLE, hoy.isoformat()),
+        ).fetchall()
+
+    totales = {
+        (grupo, rh): {
+            "grupo": grupo,
+            "rh": rh,
+            "unidades": 0,
+            "litros": 0,
+            "proximo_vencimiento": None,
+        }
+        for grupo in ("A", "B", "AB", "O")
+        for rh in ("+", "-")
+    }
+
+    unidades = [dict(fila) for fila in filas]
+
+    for unidad in unidades:
+        clave = (unidad["GRUPO"], unidad["RH"])
+
+        if clave not in totales:
+            totales[clave] = {
+                "grupo": clave[0],
+                "rh": clave[1],
+                "unidades": 0,
+                "litros": 0,
+                "proximo_vencimiento": None,
+            }
+
+        total = totales[clave]
+        total["unidades"] += 1
+        total["litros"] += unidad["CANTIDAD"] or 0
+
+        fecha = unidad["VENCIMIENTO"]
+        anterior = total["proximo_vencimiento"]
+
+        if anterior is None or fecha < anterior:
+            total["proximo_vencimiento"] = fecha
+
+    return {
+        "totales": list(totales.values()),
+        "unidades": unidades,
+    }
 
 def iniciar_actualizacion(widget, ruta=RUTA_BD):
     #Comprueba cada minuto si corresponde la actualización diaria.

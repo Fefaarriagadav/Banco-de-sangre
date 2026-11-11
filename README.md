@@ -208,3 +208,12 @@ python -m unittest discover -s tests -v
 Las pruebas de H6 utilizan bases temporales y cubren persistencia,
 validaciones, cambios de mes y año, corte horario chileno,
 migración y actualización automática.
+
+### H6-T2: Alertas y stock en la ventana principal
+
+La ventana principal muestra:
+- Stock total disponible en unidades y litros.
+- Unidades disponibles próximas a expirar, identificadas por ID,
+  grupo sanguíneo, factor Rh y fecha de vencimiento.
+- Cantidad de unidades pendientes de revisión.
+- Fecha y hora de la última actualización.

@@ -374,6 +374,285 @@ class VencimientosTest(unittest.TestCase):
             ("2026-12-01", v.DISPONIBLE),
         )
 
+    def test_ventana_alerta_y_stock(self):
+        vence_hoy = self.insertar_unidad("2026-11-11")
+        vence_en_siete = self.insertar_unidad("2026-11-18")
+        self.insertar_unidad("2026-11-19")
+        vencida = self.insertar_unidad("2026-11-10")
+        self.insertar_unidad("2026-11-12", estado=v.USADA)
+        self.insertar_unidad("2026-11-12", estado=v.DESCARTADA)
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(
+            [unidad["ID"] for unidad in resumen["proximas"]],
+            [vence_hoy, vence_en_siete],
+        )
+        self.assertEqual(resumen["unidades"], 3)
+        self.assertAlmostEqual(resumen["litros"], 1.35)
+        self.assertEqual(
+            self.consultar_unidad(vencida)[1],
+            v.VENCIDA,
+        )
+
+    def test_fechas_invalidas_no_cuentan_como_stock(self):
+        fechas = [
+            None,
+            "",
+            "fecha inválida",
+            "2026-02-31",
+            "2026-10-31",
+        ]
+
+        for fecha in fechas:
+            self.insertar_unidad(vencimiento=fecha)
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(resumen["unidades"], 0)
+        self.assertEqual(resumen["litros"], 0)
+        self.assertEqual(resumen["proximas"], [])
+        self.assertEqual(resumen["pendientes"], len(fechas))
+
+    def test_reservadas_no_cuentan_y_caducan(self):
+        vigente = self.insertar_unidad(
+            "2026-11-18",
+            estado="Reservada",
+        )
+        caducada = self.insertar_unidad(
+            "2026-11-10",
+            estado="Reservada",
+        )
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(
+            self.consultar_unidad(vigente)[1],
+            "Reservada",
+        )
+        self.assertEqual(
+            self.consultar_unidad(caducada)[1],
+            v.VENCIDA,
+        )
+        self.assertEqual(resumen["unidades"], 0)
+        self.assertEqual(resumen["proximas"], [])
+
+    def test_ventana_configurable_y_parametros_invalidos(self):
+        vence_hoy = self.insertar_unidad("2026-11-11")
+        self.insertar_unidad("2026-11-12")
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+            dias_alerta=0,
+        )
+
+        self.assertEqual(
+            [unidad["ID"] for unidad in resumen["proximas"]],
+            [vence_hoy],
+        )
+        self.assertEqual(resumen["unidades"], 2)
+
+        for dias in (-1, 1.5, True, "7"):
+            with self.subTest(dias=dias):
+                with self.assertRaises(ValueError):
+                    v.consultar_resumen(
+                        ruta=self.ruta,
+                        ahora=self.ahora,
+                        dias_alerta=dias,
+                    )
+
+    def test_stock_agrupado_por_tipo_y_rh(self):
+        primera = self.insertar_unidad(
+            "2026-11-14", cantidad=0.45
+        )
+        segunda = self.insertar_unidad(
+            "2026-11-18", cantidad=0.30
+        )
+        tercera = self.insertar_unidad(
+            "2026-11-19", cantidad=0.45
+        )
+
+        self.insertar_unidad("2026-11-10")
+        self.insertar_unidad(
+            "2026-11-14", estado=v.USADA
+        )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET TIPO_SANGRE = 'A', FACTOR_RH = '+'
+                WHERE ID IN (?, ?)
+                """,
+                (primera, segunda),
+            )
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET TIPO_SANGRE = 'O', FACTOR_RH = '-'
+                WHERE ID = ?
+                """,
+                (tercera,),
+            )
+
+        datos = v.consultar_stock_detallado(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        totales = {
+            (fila["grupo"], fila["rh"]): fila
+            for fila in datos["totales"]
+        }
+
+        self.assertEqual(totales[("A", "+")]["unidades"], 2)
+        self.assertAlmostEqual(
+            totales[("A", "+")]["litros"], 0.75
+        )
+        self.assertEqual(
+            totales[("A", "+")]["proximo_vencimiento"],
+            "2026-11-14",
+        )
+        self.assertEqual(totales[("O", "-")]["unidades"], 1)
+        self.assertEqual(totales[("AB", "+")]["unidades"], 0)
+        self.assertEqual(
+            {fila["ID"] for fila in datos["unidades"]},
+            {primera, segunda, tercera},
+        )
+    def test_extraccion_futura_no_cuenta_en_stock(self):
+        unidad_id = self.insertar_unidad(
+            extraccion="2026-11-12",
+            vencimiento="2026-12-02",
+        )
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+        detalle = v.consultar_stock_detallado(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(resumen["unidades"], 0)
+        self.assertEqual(resumen["pendientes"], 1)
+        self.assertEqual(detalle["unidades"], [])
+        self.assertEqual(
+            self.consultar_unidad(unidad_id)[1],
+            v.PENDIENTE,
+        )
+
+        # H6 conserva las fechas originales para su revisión.
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            fechas = conexion.execute(
+                """
+                SELECT FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO
+                FROM DONACIONES
+                WHERE ID = ?
+                """,
+                (unidad_id,),
+            ).fetchone()
+
+        self.assertEqual(
+            fechas,
+            ("2026-11-12", "2026-12-02"),
+        )
+
+    def test_cantidades_invalidas_se_excluyen_del_stock(self):
+        cantidades = [
+            None,
+            0,
+            -0.45,
+            float("inf"),
+            float("-inf"),
+            "cantidad inválida",
+        ]
+
+        for cantidad in cantidades:
+            self.insertar_unidad(
+                vencimiento="2026-11-14",
+                cantidad=cantidad,
+            )
+
+        resumen = v.consultar_resumen(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+        detalle = v.consultar_stock_detallado(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(resumen["unidades"], 0)
+        self.assertEqual(resumen["litros"], 0)
+        self.assertEqual(resumen["proximas"], [])
+        self.assertEqual(
+            resumen["pendientes"],
+            len(cantidades),
+        )
+        self.assertEqual(detalle["unidades"], [])
+
+    def test_transaccion_protege_estados_de_otras_escrituras(self):
+        unidad_id = self.insertar_unidad()
+
+        with v.conectar(self.ruta) as conexion:
+            estado = conexion.execute(
+                "SELECT ESTADO FROM DONACIONES WHERE ID = ?",
+                (unidad_id,),
+            ).fetchone()[0]
+
+            self.assertEqual(estado, v.DISPONIBLE)
+
+            # Simula otro proceso intentando usar la unidad
+            # mientras H6 está consultando y actualizando.
+            with closing(
+                sqlite3.connect(self.ruta, timeout=0)
+            ) as otra:
+                with self.assertRaisesRegex(
+                    sqlite3.OperationalError,
+                    "locked",
+                ):
+                    otra.execute(
+                        """
+                        UPDATE DONACIONES
+                        SET ESTADO = ?
+                        WHERE ID = ?
+                        """,
+                        (v.USADA, unidad_id),
+                    )
+
+        # Al finalizar H6, el otro proceso puede escribir.
+        with closing(
+            sqlite3.connect(self.ruta)
+        ) as otra, otra:
+            otra.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO = ?
+                WHERE ID = ?
+                """,
+                (v.USADA, unidad_id),
+            )
+
+        v.actualizar_vencimientos(
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(
+            self.consultar_unidad(unidad_id)[1],
+            v.USADA,
+        )
 
 if __name__ == "__main__":
     unittest.main()
