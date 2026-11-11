@@ -1,3 +1,5 @@
+from typing import Any
+
 import customtkinter as ctk
 from datetime import date, timedelta
 import math
@@ -5,7 +7,7 @@ import re
 import sqlite3
 from datos.configuracion import RUTA_BD
 
-from servicios.elegibilidad import consultar_donante, FORMATO_FECHA
+from servicios.elegibilidad import buscar_candidatos, consultar_donante, FORMATO_FECHA, consultar_donanteApto
 
 def mostrar_adonacion(pantalla, rol):
     if rol != "Enfermero": #por ahora el personal es entrevistador, deveria ser enfermero
@@ -55,6 +57,11 @@ def mostrar_adonacion(pantalla, rol):
             return
         try: # donante existe
             consultar_donante(id_ingresado)
+        except ValueError as e:
+            mensaje_error.configure(text=str(e))
+            return
+        try: # donante apto
+            consultar_donanteApto(id_ingresado)
         except ValueError as e:
             mensaje_error.configure(text=str(e))
             return

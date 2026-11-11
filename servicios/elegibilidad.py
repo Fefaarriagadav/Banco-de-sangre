@@ -48,6 +48,19 @@ def consultar_donante(donante_id, ruta=RUTA_BD):
         raise ValueError("No existe un donante con ese ID.")
     return dict(fila)
 
+def consultar_donanteApto(donante_id, ruta=RUTA_BD, hoy=None):
+    # Recupera la información básica del donante para mostrarla en la interfaz.
+    donante_id = validar_id(donante_id)
+    hoy = hoy or date.today().isoformat()
+    with conectar(ruta) as conexion:
+        fila = conexion.execute(
+                    "SELECT ID, GRUPO_SANGUINEO, FACTOR_RH, EMAIL FROM DONANTES "
+                    "WHERE ID = ? AND " + SQL_HABILITADO,
+                    (donante_id, hoy)).fetchone()
+    if fila is None:
+        raise ValueError("No existe un donante apto con ese ID.")
+    return dict(fila)
+
 
 def _leer_fecha(texto, nombre):
     # Convierte la fecha ingresada por la interfaz al tipo date con validación.
@@ -115,7 +128,7 @@ def candidato_vigente(donante_id, grupo, rh, ruta=RUTA_BD, hoy=None):
 
 
 def buscar_donantes(texto, ruta=RUTA_BD):
-    # Busca donantes por nombre, apellido o email sin distinguir tildes ni mayúsculas(se implemento, pero no se usa en la interfaz).
+    # Busca donantes por nombre, apellido o email sin distinguir tildes ni mayúsculas(se implemento, pero no se usa en la interfaz(yo si lo ocupe -oliver)).
     palabras = texto.strip().split()
     if not palabras:
         raise ValueError("Ingrese nombre, apellido o correo del donante.")
@@ -134,6 +147,32 @@ def buscar_donantes(texto, ruta=RUTA_BD):
             + condiciones + ' ORDER BY APELLIDO, NOMBRE, ID LIMIT 51',
             [normalizar(palabra) for palabra in palabras]).fetchall()
     return [dict(fila) for fila in filas]
+
+def buscar_donacion(texto, ruta=RUTA_BD):
+    # Busca donaciones por id de donante o id de donacion.
+    palabras = texto.strip().split()
+    if not palabras:
+        raise ValueError("Ingrese id de donante o id de donacion.")
+
+    with conectar(ruta) as conexion:
+        condiciones = ' AND '.join(
+            "instr(DONANTE || ' ' || ID, ?) > 0"
+            for _ in palabras)
+        filas = conexion.execute(
+            'SELECT ID, DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO FROM DONACIONES WHERE '
+            + condiciones + ' ORDER BY FECHA_EXTRACCIÓN DESC LIMIT 51',
+            [palabra for palabra in palabras]).fetchall()
+    return [dict(fila) for fila in filas]
+
+def donacion_vigente(donacion_id, ruta=RUTA_BD, hoy=None):
+    # Verifica si la donación sigue vigente (no vencida ni usada).
+    hoy = (hoy or date.today()).isoformat()
+    with conectar(ruta) as conexion:
+        fila = conexion.execute(
+            "SELECT ID, DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO FROM DONACIONES "
+            "WHERE ID = ? AND APTA = 'Si' AND FECHA_VENCIMIENTO >= ?",
+            (donacion_id, hoy)).fetchone()
+    return dict(fila) if fila else None
 
 
 def guardar_resultado(donante_id, resultado, empleado_id, inicio=None, fin=None, ruta=RUTA_BD, hoy=None):
