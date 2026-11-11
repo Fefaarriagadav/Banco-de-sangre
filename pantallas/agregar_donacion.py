@@ -8,6 +8,12 @@ from datetime import datetime
 
 from servicios.elegibilidad import consultar_donante, FORMATO_FECHA
 
+from servicios.vencimientos import (
+    DISPONIBLE,
+    calcular_vencimiento,
+    fecha_actual,
+)
+
 def mostrar_adonacion(pantalla, rol):
     if rol != "Entrevistador": #por ahora el personal es entrevistador, deveria ser enfermero
         from tkinter import messagebox
@@ -58,8 +64,10 @@ def mostrar_adonacion(pantalla, rol):
             return
         
        
-        fecha_extraccion_sql = date.today().isoformat()
-        fecha_vencimiento_sql = (date.today().replace(day=date.today().day + 20)).isoformat()
+        fecha_extraccion_sql = fecha_actual().isoformat()
+        fecha_vencimiento_sql = calcular_vencimiento(
+            fecha_extraccion_sql
+        )
         id_ingresado = int(id_ingresado)
         litros_ingresados = float(litros_ingresados)
 
@@ -67,8 +75,25 @@ def mostrar_adonacion(pantalla, rol):
         cursor = conexion.cursor()
 
 
-        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO)
-            VALUES (?, ?, ?, ?)""", (id_ingresado, litros_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql))
+        cursor.execute(
+            """
+            INSERT INTO DONACIONES (
+                DONANTE,
+                CANTIDAD,
+                FECHA_EXTRACCIÓN,
+                FECHA_VENCIMIENTO,
+                ESTADO
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                id_ingresado,
+                litros_ingresados,
+                fecha_extraccion_sql,
+                fecha_vencimiento_sql,
+                DISPONIBLE,
+            ),
+        )
 
         id_donacion = cursor.lastrowid
         conexion.commit()

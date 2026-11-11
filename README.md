@@ -141,3 +141,70 @@ Las dependencias externas del proyecto se encuentran en `requirements.txt`:
 - `python-dotenv`: lectura de variables de entorno.
 
 Otras bibliotecas utilizadas, como `sqlite3`, `smtplib`, `email`, `os` y `pathlib`, forman parte de la biblioteca estándar de Python.
+
+## H6-T1: Registro y actualización de vencimientos
+### Funcionamiento
+Cada registro de `DONACIONES` representa una unidad del modelo actual.
+
+Al registrar una donación:
+- La fecha de extracción se obtiene según la zona horaria `America/Santiago`.
+- El vencimiento se calcula automáticamente desde la extracción.
+- Se guarda la fecha de vencimiento y el estado `Disponible`.
+- La confirmación del registro muestra el vencimiento calculado. (Aun hay que ver cuantos días le ponemos, ahora tiene 20 pero podrían ser hasta 35)
+La vida útil se configura mediante `VIDA_UTIL_DIAS`, en
+`servicios/vencimientos.py`. Su valor inicial es **20 días**, conservando
+la regla previa del proyecto. Como dije arriba se debe hablar en conjunto que valor le damos.
+
+La unidad permanece vigente durante toda su fecha de vencimiento.
+A las 00:00 del día siguiente corresponde marcarla como `Vencida`.
+
+### Validaciones y estados
+El servicio permite guardar vencimientos con formato `DD-MM-AAAA`
+y los almacena como `AAAA-MM-DD`.
+
+Rechaza fechas ausentes, inexistentes o anteriores a la extracción,
+sin sustituir un valor válido por un dato inválido.
+
+Los registros con fechas ausentes o inconsistentes quedan como
+`Pendiente de revisión` al ejecutar la actualización.
+
+Las unidades usadas, descartadas o vencidas no se reactivan automáticamente.
+Tampoco se permite extender la vigencia de una unidad que ya caducó.
+
+### Actualización automática
+
+La aplicación actualiza los vencimientos al iniciar y comprueba cada minuto
+si cambió el día para ejecutar nuevamente el proceso.
+
+También puede ejecutarse sin interfaz desde la raíz del proyecto:
+
+```powershell
+python -m servicios.vencimientos
+```
+
+En Windows se incluye el archivo:
+
+```text
+scripts/actualizar_vencimientos.bat
+```
+
+El archivo `.bat` no registra la tarea automáticamente: cada instalación
+debe configurarla y verificar su ejecución.
+
+### Pruebas
+
+Ejecutar las pruebas de vencimientos:
+
+```powershell
+python -m unittest discover -s tests -p "test_vencimientos.py" -v
+```
+
+Ejecutar toda la suite:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Las pruebas de H6 utilizan bases temporales y cubren persistencia,
+validaciones, cambios de mes y año, corte horario chileno,
+migración y actualización automática.
