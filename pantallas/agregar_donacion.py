@@ -78,8 +78,8 @@ def mostrar_adonacion(pantalla, rol):
         cursor = conexion.cursor()
 
 
-        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, TIPO_SANGRE, FACTOR_RH)
-            VALUES (?, ?, ?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql, tipo_donacion, rh_donacion))
+        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, TIPO_SANGRE, FACTOR_RH, APTA)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql, tipo_donacion, rh_donacion, "Si"))
 
         id_donacion = cursor.lastrowid
         conexion.commit()
