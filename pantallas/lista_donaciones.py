@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import sqlite3
 from datos.configuracion import RUTA_BD
-from servicios.elegibilidad import buscar_candidatos
+from servicios.elegibilidad import buscar_sangre
 
 def mostrar_lista_donaciones(pantalla):
     #se crea un frame que contiene todos los elementos de la pantalla para la lista de donaciones
@@ -64,73 +64,81 @@ def mostrar_lista_donaciones(pantalla):
     for columna in range(3):
         frame_resultados.grid_columnconfigure(columna, weight=1)
 
-    total_donantes = ctk.CTkLabel(frame_filtro,text="Total de donantes aptos: 0",font=("Arial", 20, "bold"))
-    total_donantes.place(relx=0.5,rely=0.85,anchor="center")
+    total_donanciones = ctk.CTkLabel(frame_filtro,text="Total de donaciones encontradas: 0",font=("Arial", 20, "bold"))
+    total_donanciones.place(relx=0.5,rely=0.85,anchor="center")
 
-    donantes_encontrados = []
+    donaciones_encontradas = []
     filtros_buscados = None
 
     def limpiar_resultados():
         #en caso de que se cambien los filtros, se limpian los resultados y se deshabilita el boton de enviar correo
-        nonlocal donantes_encontrados, filtros_buscados
+        nonlocal donaciones_encontradas, filtros_buscados
 
-        donantes_encontrados = []
+        donaciones_encontradas = []
         filtros_buscados = None
-
-        total_donantes.configure(text="Total de donantes aptos: 0")
-
-        for widget in frame_resultados.winfo_children():
-            widget.destroy()
 
     def invalidar_busqueda(valor=None):
         limpiar_resultados()
         mostrar_mensaje("")
 
-    def buscar_donantes():
-        #se buscan los donantes en la base de datos segun los filtros seleccionados y se muestran en el frame de resultados
-        nonlocal donantes_encontrados, filtros_buscados
+    def buscar_donaciones():
+        #se buscan las donaciones en la base de datos segun los filtros seleccionados y se muestran en el frame de resultados
+        nonlocal donaciones_encontradas, filtros_buscados
 
         limpiar_resultados()
         ts_seleccionado = ts.get()
         rh_seleccionado = rh.get()
-        if (ts_seleccionado == "Seleccione" or rh_seleccionado == "Seleccione"):
-            mostrar_mensaje("Por favor, seleccione ambos filtros.")
+        apto_seleccionado = apto.get()
+        if (ts_seleccionado == "Seleccione" or rh_seleccionado == "Seleccione" or apto_seleccionado == "Seleccione"):
+            mostrar_mensaje("Por favor, seleccione los 3 filtros.")
             return
 
         mostrar_mensaje("")
         rh_bd = "+" if rh_seleccionado == "Positivo" else "-"
+        if apto_seleccionado == "Apta":
+            ap_bd = 'Si'
+        elif apto_seleccionado == "Usada":
+            ap_bd = 'No(Usada)'
+        elif apto_seleccionado == "Vencida":
+            ap_bd = 'No(Vencida)'
+        else:
+            ap_bd = None
+        print(f"Buscando donaciones con filtros: Tipo de sangre={ts_seleccionado}, Factor RH={rh_bd}, Apta={ap_bd}")
         try:
-            # Excluye a quienes tienen una restricción vigente (temporal o permanente).
-            donantes_encontrados = buscar_candidatos(ts_seleccionado, rh_bd)
+            # Excluye las donaciones no aptas.
+            donaciones_encontradas = buscar_sangre(ts_seleccionado, rh_bd, ap_bd)
+            print(f"Donaciones encontradas: {donaciones_encontradas}")
         except sqlite3.Error:
             mostrar_mensaje("No se pudo consultar la base de datos.")
             return
 
-        filtros_buscados = (ts_seleccionado, rh_bd)
+        filtros_buscados = (ts_seleccionado, rh_bd, ap_bd)
 
-        total_donantes.configure(text=f"Total de donantes aptos: {len(donantes_encontrados)}")
-        encabezados = ["ID","Grupo sanguíneo","Factor Rh"]
+        total_donanciones.configure(text=f"Total de donaciones encontradas: {len(donaciones_encontradas)}")
+        encabezados = ["ID","Grupo sanguíneo","Factor Rh","Apta"]
 
         for columna, encabezado in enumerate(encabezados):
             etiqueta = ctk.CTkLabel(frame_resultados,text=encabezado,font=("Arial", 15, "bold"))
             etiqueta.grid(row=0,column=columna,padx=15,pady=10)
 
-        for fila, donante in enumerate(donantes_encontrados, start=1):
-            for columna, dato in enumerate(donante[:3]):
+        for fila, donacion in enumerate(donaciones_encontradas, start=1):
+            for columna, dato in enumerate(donacion[:3]):
                 etiqueta = ctk.CTkLabel(frame_resultados,text=str(dato),font=("Arial", 14))
                 etiqueta.grid(row=fila,column=columna,padx=15,pady=5)
 
     def limpiar_filtros():
         ts.set("Seleccione")
         rh.set("Seleccione")
+        apto.set("Seleccione")
         limpiar_resultados()
         mostrar_mensaje("")
 
     
     ts.configure(command=invalidar_busqueda)
     rh.configure(command=invalidar_busqueda)
+    apto.configure(command=invalidar_busqueda)
 
-    buscar_boton = ctk.CTkButton(frame_seleccion,text="Buscar",command=buscar_donantes,text_color="#FFFFFF",fg_color="#DC2626",width=200,height=45)
+    buscar_boton = ctk.CTkButton(frame_seleccion,text="Buscar",command=buscar_donaciones,text_color="#FFFFFF",fg_color="#DC2626",width=200,height=45)
     buscar_boton.grid(row=3,column=0,pady=20)
 
     boton_limpiar = ctk.CTkButton(frame_seleccion,text="Limpiar filtros",command=limpiar_filtros,fg_color="#64748B",text_color="#FFFFFF",width=200,height=45)

@@ -48,7 +48,7 @@ def consultar_donante(donante_id, ruta=RUTA_BD):
         raise ValueError("No existe un donante con ese ID.")
     return dict(fila)
 
-def consultar_donanteSangre(donante_id, ruta=RUTA_BD): #nose si puedo modificar esta función, pero la agregue una copia para poder obtener el grupo sanguineo y el factor rh del donante - oliver/ricardp
+def consultar_donanteSangre(donante_id, ruta=RUTA_BD): #nose si puedo modificar esta función, pero agregue una copia para poder obtener el grupo sanguineo y el factor rh del donante - oliver/ricardo
     # Recupera la información básica del donante para mostrarla en la interfaz.
     donante_id = validar_id(donante_id)
     with conectar(ruta) as conexion:
@@ -58,7 +58,7 @@ def consultar_donanteSangre(donante_id, ruta=RUTA_BD): #nose si puedo modificar 
     return dict(fila)
 
 def consultar_donanteApto(donante_id, ruta=RUTA_BD, hoy=None):
-    # Consulta si el donante sigue siendo apto para donar (sin restricciones vigentes).
+    # Consulta si el donante (unico) sigue siendo apto para donar (sin restricciones vigentes).
     donante_id = validar_id(donante_id)
     hoy = hoy or date.today().isoformat()
     with conectar(ruta) as conexion:
@@ -124,6 +124,15 @@ def buscar_candidatos(grupo, rh, ruta=RUTA_BD, hoy=None):
             (grupo, rh, hoy)).fetchall()
     return [tuple(fila) for fila in filas]
 
+def buscar_sangre(grupo, rh, apta, ruta=RUTA_BD):
+    # Busca donaciones aptas para una solicitud de sangre según grupo y factor RH.
+    """Donaciones de un grupo, Rh y aptas."""
+    with conectar(ruta) as conexion:
+        filas = conexion.execute(
+            "SELECT ID, GRUPO_SANGUINEO, FACTOR_RH, APTA FROM DONACIONES"
+            "WHERE GRUPO_SANGUINEO = ? AND FACTOR_RH = ? AND APTA = ? AND",
+            (grupo, rh, apta)).fetchall()
+    return [tuple(fila) for fila in filas]
 
 def candidato_vigente(donante_id, grupo, rh, ruta=RUTA_BD, hoy=None):
     # Verifica una última vez si el donante sigue habilitado antes de enviar comunicaciones.
