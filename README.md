@@ -235,6 +235,11 @@ La sección "Stocks", accesible desde el menú lateral, incluye:
 
 Cada registro de DONACIONES representa una unidad del modelo actual.
 
+El registro de H5 y la columna CANTIDAD utilizan centímetros cúbicos (cc).
+El resumen y la vista Stocks de H6 convierten esas cantidades a litros
+al mostrarlas: 450 cc equivalen a 0,45 litros. Los datos almacenados no se
+convierten ni se modifican por esta presentación.
+
 La ventana de alerta inicial es de 7 días, configurable mediante
 DIAS_ALERTA en servicios/vencimientos.py. Incluye hoy y el séptimo
 día.

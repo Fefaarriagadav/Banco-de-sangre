@@ -28,7 +28,7 @@ class VencimientosTest(unittest.TestCase):
         vencimiento="2026-11-18",
         estado=v.DISPONIBLE,
         extraccion="2026-11-01",
-        cantidad=0.45,
+        cantidad=450,
     ):
         with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
             cursor = conexion.execute(
@@ -473,13 +473,13 @@ class VencimientosTest(unittest.TestCase):
 
     def test_stock_agrupado_por_tipo_y_rh(self):
         primera = self.insertar_unidad(
-            "2026-11-14", cantidad=0.45
+            "2026-11-14", cantidad=450
         )
         segunda = self.insertar_unidad(
-            "2026-11-18", cantidad=0.30
+            "2026-11-18", cantidad=300
         )
         tercera = self.insertar_unidad(
-            "2026-11-19", cantidad=0.45
+            "2026-11-19", cantidad=450
         )
 
         self.insertar_unidad("2026-11-10")

@@ -365,7 +365,7 @@ def consultar_resumen(
 
         return {
             "unidades": stock[0],
-            "litros": stock[1],
+            "litros": stock[1] / 1000.0,  # CANTIDAD se guarda en cc (H5).
             "proximas": [dict(fila) for fila in proximas],
             "pendientes": pendientes,
         }
@@ -425,7 +425,7 @@ def consultar_stock_detallado(ruta=RUTA_BD, ahora=None):
 
         total = totales[clave]
         total["unidades"] += 1
-        total["litros"] += unidad["CANTIDAD"] or 0
+        total["litros"] += (unidad["CANTIDAD"] or 0) / 1000.0
 
         fecha = unidad["VENCIMIENTO"]
         anterior = total["proximo_vencimiento"]

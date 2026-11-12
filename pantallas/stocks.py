@@ -177,7 +177,7 @@ def mostrar_stocks(pantalla):
                     unidad["ID"],
                     unidad["GRUPO"],
                     unidad["RH"],
-                    f"{(unidad['CANTIDAD'] or 0):.2f}",
+                    f"{(unidad['CANTIDAD'] or 0) / 1000.0:.2f}",
                     formatear_fecha(unidad["EXTRACCION"]),
                     formatear_fecha(unidad["VENCIMIENTO"]),
                 ),
