@@ -124,14 +124,14 @@ def buscar_candidatos(grupo, rh, ruta=RUTA_BD, hoy=None):
             (grupo, rh, hoy)).fetchall()
     return [tuple(fila) for fila in filas]
 
-def buscar_sangre(grupo, rh, apta, ruta=RUTA_BD):
+def buscar_sangre(grupo, rh, ruta=RUTA_BD):
     # Busca donaciones aptas para una solicitud de sangre según grupo y factor RH.
-    """Donaciones de un grupo, Rh y aptas."""
+    """Donaciones de un grupo y RH."""
     with conectar(ruta) as conexion:
         filas = conexion.execute(
-            "SELECT ID, GRUPO_SANGUINEO, FACTOR_RH, APTA FROM DONACIONES"
-            "WHERE GRUPO_SANGUINEO = ? AND FACTOR_RH = ? AND APTA = ? AND",
-            (grupo, rh, apta)).fetchall()
+            "SELECT DONANTE, CANTIDAD, TIPO_SANGRE, FACTOR_RH FROM DONACIONES "
+            "WHERE TIPO_SANGRE = ? AND FACTOR_RH = ?",
+            (grupo, rh)).fetchall()
     return [tuple(fila) for fila in filas]
 
 def candidato_vigente(donante_id, grupo, rh, ruta=RUTA_BD, hoy=None):

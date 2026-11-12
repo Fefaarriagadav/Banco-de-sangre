@@ -76,11 +76,9 @@ def mostrar_adonacion(pantalla, rol):
 
         conexion = sqlite3.connect(RUTA_BD)
         cursor = conexion.cursor()
-        Apta = "Si"  # Se asume que la donación es apta al momento de registrarla
 
-
-        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, TIPO_SANGRE, FACTOR_RH, APTA)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql, tipo_donacion, rh_donacion, Apta))
+        cursor.execute("""INSERT INTO DONACIONES (DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, TIPO_SANGRE, FACTOR_RH)
+            VALUES (?, ?, ?, ?, ?, ?)""", (id_ingresado, cc_ingresados, fecha_extraccion_sql, fecha_vencimiento_sql, tipo_donacion, rh_donacion))
 
         id_donacion = cursor.lastrowid
         conexion.commit()

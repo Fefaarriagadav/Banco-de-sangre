@@ -31,13 +31,6 @@ def mostrar_lista_donaciones(pantalla):
     rh.set("Seleccione")
     rh.grid(row=1, column=1, padx=10, pady=20)
 
-    titulo_apto = ctk.CTkLabel(frame_seleccion,text="Seleccionar Validación",font=("Arial", 20, "bold"),text_color="#000000")
-    titulo_apto.grid(row=0, column=2, padx=20, pady=5)
-    factores = ["Seleccione", "Apta", "Usada", "Vencida"]
-    apto = ctk.CTkOptionMenu(frame_seleccion,values=factores, width=280,height=55,font=("Arial", 17))
-    apto.set("Seleccione")
-    apto.grid(row=1, column=2, padx=10, pady=20)
-
     
 
     mensaje_error = ctk.CTkLabel(frame_filtro,text="",text_color="#DC2626",font=("Arial", 16, "bold"))
@@ -77,6 +70,9 @@ def mostrar_lista_donaciones(pantalla):
         donaciones_encontradas = []
         filtros_buscados = None
 
+        for widget in frame_resultados.winfo_children():
+            widget.destroy()
+
     def invalidar_busqueda(valor=None):
         limpiar_resultados()
         mostrar_mensaje("")
@@ -88,55 +84,41 @@ def mostrar_lista_donaciones(pantalla):
         limpiar_resultados()
         ts_seleccionado = ts.get()
         rh_seleccionado = rh.get()
-        apto_seleccionado = apto.get()
-        if (ts_seleccionado == "Seleccione" or rh_seleccionado == "Seleccione" or apto_seleccionado == "Seleccione"):
-            mostrar_mensaje("Por favor, seleccione los 3 filtros.")
+        if (ts_seleccionado == "Seleccione" or rh_seleccionado == "Seleccione"):
+            mostrar_mensaje("Por favor, seleccione ambos filtros.")
             return
 
         mostrar_mensaje("")
         rh_bd = "+" if rh_seleccionado == "Positivo" else "-"
-        if apto_seleccionado == "Apta":
-            ap_bd = 'Si'
-        elif apto_seleccionado == "Usada":
-            ap_bd = 'No(Usada)'
-        elif apto_seleccionado == "Vencida":
-            ap_bd = 'No(Vencida)'
-        else:
-            ap_bd = None
-        print(f"Buscando donaciones con filtros: Tipo de sangre={ts_seleccionado}, Factor RH={rh_bd}, Apta={ap_bd}")
         try:
-            # Excluye las donaciones no aptas.
-            donaciones_encontradas = buscar_sangre(ts_seleccionado, rh_bd, ap_bd)
-            print(f"Donaciones encontradas: {donaciones_encontradas}")
-        except sqlite3.Error:
+            donaciones_encontradas = buscar_sangre(ts_seleccionado, rh_bd)
+        except sqlite3.Error as e:
             mostrar_mensaje("No se pudo consultar la base de datos.")
             return
 
-        filtros_buscados = (ts_seleccionado, rh_bd, ap_bd)
+        filtros_buscados = (ts_seleccionado, rh_bd)
 
         total_donanciones.configure(text=f"Total de donaciones encontradas: {len(donaciones_encontradas)}")
-        encabezados = ["ID","Grupo sanguíneo","Factor Rh","Apta"]
+        encabezados = ["Donador","Cantidad (cc)","Grupo sanguíneo","Factor Rh"]
 
         for columna, encabezado in enumerate(encabezados):
             etiqueta = ctk.CTkLabel(frame_resultados,text=encabezado,font=("Arial", 15, "bold"))
             etiqueta.grid(row=0,column=columna,padx=15,pady=10)
 
         for fila, donacion in enumerate(donaciones_encontradas, start=1):
-            for columna, dato in enumerate(donacion[:3]):
+            for columna, dato in enumerate(donacion[:4]):
                 etiqueta = ctk.CTkLabel(frame_resultados,text=str(dato),font=("Arial", 14))
                 etiqueta.grid(row=fila,column=columna,padx=15,pady=5)
 
     def limpiar_filtros():
         ts.set("Seleccione")
         rh.set("Seleccione")
-        apto.set("Seleccione")
         limpiar_resultados()
         mostrar_mensaje("")
 
     
     ts.configure(command=invalidar_busqueda)
     rh.configure(command=invalidar_busqueda)
-    apto.configure(command=invalidar_busqueda)
 
     buscar_boton = ctk.CTkButton(frame_seleccion,text="Buscar",command=buscar_donaciones,text_color="#FFFFFF",fg_color="#DC2626",width=200,height=45)
     buscar_boton.grid(row=3,column=0,pady=20)
