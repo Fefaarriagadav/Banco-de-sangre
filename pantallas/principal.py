@@ -6,7 +6,7 @@ from pantallas.pedir_donaciones import mostrar_pedir_donaciones
 from pantallas.agregar_donacion import mostrar_adonacion
 from pantallas.panel_vencimientos import mostrar_panel_vencimientos
 from pantallas.stocks import mostrar_stocks
-
+from pantallas.alertas_redistribucion import mostrar_alertas_redistribucion
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
     #se divide en frames para hacer mas facil el trabajo de cambio de pantallas y los clicks 
@@ -41,6 +41,21 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     if rol == "Enfermero": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
             boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
             boton_donancion.place(x=20, y=280)
+
+            def abrir_alertas():
+                mostrar_alertas_redistribucion(frame_contenido)
+                menu_lateral.place_forget()
+
+            boton_alertas_stock = ctk.CTkButton(
+                menu_lateral,
+                text="Alertas Sobreabastecimiento",
+                width=210,
+                height=45,
+                text_color="#000000",
+                fg_color="#FDBA74",
+                command=abrir_alertas
+            )
+            boton_alertas_stock.place(x=20, y=450)
 
     boton_lista_donaciones = ctk.CTkButton(menu_lateral, text="Lista de donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_lista_donaciones(frame_contenido))
     boton_lista_donaciones.place(x=20, y=330)
