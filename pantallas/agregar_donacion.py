@@ -2,17 +2,10 @@ import customtkinter as ctk
 import sqlite3
 from datos.configuracion import RUTA_BD
 
-from servicios.elegibilidad import (
-    consultar_donante, consultar_donanteApto, consultar_donanteSangre,
-)
+from servicios.donaciones import registrar_donacion
+from servicios.vencimientos import fecha_actual
 
-from servicios.vencimientos import (
-    DISPONIBLE,
-    calcular_vencimiento,
-    fecha_actual,
-)
-
-def mostrar_adonacion(pantalla, rol):
+def mostrar_adonacion(pantalla, rol, empleado_id):
     if rol != "Enfermero":
         from tkinter import messagebox
         messagebox.showerror("Acceso denegado", "No tiene autorización para registrar donaciones.")
@@ -58,37 +51,22 @@ def mostrar_adonacion(pantalla, rol):
         if float(cc_ingresados) < 0.1 or float(cc_ingresados) > 450:
             mensaje_error.configure(text="La cantidad debe estar entre 0.1 y 450 cc")
             return
-        try: # donante existe
-            consultar_donante(id_ingresado)
-        except ValueError as e:
+        try:
+            donacion = registrar_donacion(id_ingresado, cc_ingresados, empleado_id,
+                                          ruta=RUTA_BD, hoy=fecha_actual())
+        except (ValueError, PermissionError) as e:
             mensaje_error.configure(text=str(e))
             return
-        try: # donante apto
-            consultar_donanteApto(id_ingresado)
-        except ValueError as e:
-            mensaje_error.configure(text=str(e))
+        except sqlite3.Error:
+            mensaje_error.configure(text="No se pudo registrar la donación. Intente nuevamente.")
             return
-        
-        sangre_donante = consultar_donanteSangre(id_ingresado)
-        rh_donacion = sangre_donante["FACTOR_RH"]
-        tipo_donacion = sangre_donante["GRUPO_SANGUINEO"]
-        fecha_extraccion_sql = fecha_actual().isoformat()
-        fecha_vencimiento_sql = calcular_vencimiento(fecha_extraccion_sql)
-        id_ingresado = int(id_ingresado)
-        cc_ingresados = float(cc_ingresados)
-
-        conexion = sqlite3.connect(RUTA_BD)
-        cursor = conexion.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO DONACIONES (DONANTE, TIPO_SANGRE, FACTOR_RH, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, CANTIDAD, ESTADO)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,(id_ingresado,tipo_donacion,rh_donacion,fecha_extraccion_sql, fecha_vencimiento_sql, cc_ingresados,DISPONIBLE))
-       
-        id_donacion = cursor.lastrowid
-        conexion.commit()
-        conexion.close()
+        id_donacion = donacion["ID"]
+        id_ingresado = donacion["DONANTE"]
+        cc_ingresados = donacion["CANTIDAD"]
+        fecha_extraccion_sql = donacion["FECHA_EXTRACCION"]
+        fecha_vencimiento_sql = donacion["FECHA_VENCIMIENTO"]
+        rh_donacion = donacion["FACTOR_RH"]
+        tipo_donacion = donacion["GRUPO_SANGUINEO"]
         mensaje_error.configure(
         text=f"Donacion registrada correctamente. ID: {id_donacion}",text_color="green")
         def mostrar_confirmacion(id_ingresado, cc_ingresados, fecha_extraccion_sql):
@@ -100,6 +78,10 @@ def mostrar_adonacion(pantalla, rol):
 
             datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_ingresado}\n"f"ID de donacion: {id_donacion}\n"f"CC: {cc_ingresados}\n"f"Fecha: {fecha_extraccion_sql}\n"f"Fecha a vencer: {fecha_vencimiento_sql}\n"f"Rh: {rh_donacion}\n"f"Grupo: {tipo_donacion}",font=("Arial", 18),justify="left")
             datos.pack(pady=20)
+            ctk.CTkLabel(frame_confirmacion,
+                         text="Donante NO apto temporalmente.\nFecha de habilitación: "
+                              + donacion["FECHA_HABILITACION"],
+                         font=("Arial", 18)).pack(pady=10)
         mostrar_confirmacion(id_ingresado,cc_ingresados,fecha_extraccion_sql)
 
 

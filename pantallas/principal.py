@@ -64,7 +64,7 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     boton_pedir_donaciones.place(x=20, y=220)
 
     if rol == "Enfermero": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
-        boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
+        boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol,empleado_id))
         boton_donancion.place(x=20, y=280)
 
         def abrir_alertas():
