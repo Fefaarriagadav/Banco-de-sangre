@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import sqlite3
+from servicios.vencimientos import iniciar_actualizacion
 from pantallas.principal import mostrar_principal
 from datos.configuracion import RUTA_BD
 from datos.basededatos import inicializar_base
@@ -9,6 +10,7 @@ def iniciar_app():
     inicializar_base()
     #se crea la primera ventana, donde se debe inciiar sesión
     pantalla = ctk.CTk()
+    iniciar_actualizacion(pantalla)
     pantalla.title("Banco de sangre") #titulo que lleva arriba de todo
     ctk.set_default_color_theme("blue") # color de los botones
     pantalla.state("zoomed") #atributos de la pantalla para que ocupe la pantalla completa

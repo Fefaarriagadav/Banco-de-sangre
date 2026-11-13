@@ -1,3 +1,11 @@
+import os
 from pathlib import Path
 
-RUTA_BD = Path(__file__).resolve().parent.parent / "BancoDeSangre.db"
+RAIZ = Path(__file__).resolve().parent.parent
+
+RUTA_BD = Path(
+    os.environ.get(
+        "BANCO_SANGRE_BD",
+        str(RAIZ / "BancoDeSangre.db"),
+    )
+)

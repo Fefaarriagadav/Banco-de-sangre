@@ -5,3 +5,6 @@ __pycache__/
 .env
 *.db
 *.db-journal
+BancoDeSangre_demo*.db*
+BancoDeSangre_antes_prueba_H6.db*
+prueba_h6_local.py

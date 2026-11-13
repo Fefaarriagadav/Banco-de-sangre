@@ -141,3 +141,163 @@ Las dependencias externas del proyecto se encuentran en `requirements.txt`:
 - `python-dotenv`: lectura de variables de entorno.
 
 Otras bibliotecas utilizadas, como `sqlite3`, `smtplib`, `email`, `os` y `pathlib`, forman parte de la biblioteca estándar de Python.
+
+## H6-T1: Registro y actualización de vencimientos
+### Funcionamiento
+Cada registro de `DONACIONES` representa una unidad del modelo actual.
+
+Al registrar una donación:
+- La fecha de extracción se obtiene según la zona horaria `America/Santiago`.
+- El vencimiento se calcula automáticamente desde la extracción.
+- Se guarda la fecha de vencimiento y el estado `Disponible`.
+- La confirmación del registro muestra el vencimiento calculado. (Aun hay que ver cuantos días le ponemos, ahora tiene 20 pero podrían ser hasta 35)
+La vida útil se configura mediante `VIDA_UTIL_DIAS`, en
+`servicios/vencimientos.py`. Su valor inicial es **20 días**, conservando
+la regla previa del proyecto. Como dije arriba se debe hablar en conjunto que valor le damos.
+
+La unidad permanece vigente durante toda su fecha de vencimiento.
+A las 00:00 del día siguiente corresponde marcarla como `Vencida`.
+
+### Validaciones y estados
+El servicio permite guardar vencimientos con formato `DD-MM-AAAA`
+y los almacena como `AAAA-MM-DD`.
+
+Rechaza fechas ausentes, inexistentes o anteriores a la extracción,
+sin sustituir un valor válido por un dato inválido.
+
+Los registros con fechas ausentes o inconsistentes quedan como
+`Pendiente de revisión` al ejecutar la actualización.
+
+Las unidades usadas, descartadas o vencidas no se reactivan automáticamente.
+Tampoco se permite extender la vigencia de una unidad que ya caducó.
+
+### Actualización automática
+
+La aplicación actualiza los vencimientos al iniciar y comprueba cada minuto
+si cambió el día para ejecutar nuevamente el proceso.
+
+También puede ejecutarse sin interfaz desde la raíz del proyecto:
+
+```powershell
+python -m servicios.vencimientos
+```
+
+En Windows se incluye el archivo:
+
+```text
+scripts/actualizar_vencimientos.bat
+```
+
+El archivo `.bat` no registra la tarea automáticamente: cada instalación
+debe configurarla y verificar su ejecución.
+
+### Pruebas
+
+Ejecutar las pruebas de vencimientos:
+
+```powershell
+python -m unittest discover -s tests -p "test_vencimientos.py" -v
+```
+
+Ejecutar toda la suite:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Las pruebas de H6 utilizan bases temporales y cubren persistencia,
+validaciones, cambios de mes y año, corte horario chileno,
+migración y actualización automática.
+
+### H6-T2: Alertas y stock en la ventana principal
+
+#### Funcionalidades implementadas
+
+La ventana principal incluye un panel lateral derecho con:
+- Título "Próximos a expirar".
+- Lista desplazable de unidades disponibles próximas a vencer.
+- Identificador de unidad, grupo sanguíneo, factor Rh y vencimiento.
+- Indicaciones "Vence hoy", "Vence mañana" o "En N días".
+- Fecha y hora de la última actualización.
+- Botón para actualizar manualmente.
+
+Las alertas se ordenan por vencimiento, mostrando primero las unidades
+que requieren atención más pronto.
+
+La sección "Stocks", accesible desde el menú lateral, incluye:
+- Totales disponibles para los ocho grupos sanguíneos y factores Rh.
+- Cantidad de unidades y litros por grupo/Rh.
+- Próximo vencimiento de cada grupo/Rh.
+- Detalle de unidades con fechas de extracción y vencimiento.
+- Tablas con desplazamiento y actualización manual y automática.
+
+#### Reglas de disponibilidad y alertas
+
+Cada registro de DONACIONES representa una unidad del modelo actual.
+
+El registro de H5 y la columna CANTIDAD utilizan centímetros cúbicos (cc).
+El resumen y la vista Stocks de H6 convierten esas cantidades a litros
+al mostrarlas: 450 cc equivalen a 0,45 litros. Los datos almacenados no se
+convierten ni se modifican por esta presentación.
+
+La ventana de alerta inicial es de 7 días, configurable mediante
+DIAS_ALERTA en servicios/vencimientos.py. Incluye hoy y el séptimo
+día.
+
+El stock disponible excluye:
+- Unidades vencidas, usadas, descartadas o reservadas.
+- Registros con fechas ausentes, inválidas o inconsistentes.
+- Extracciones futuras.
+- Cantidades ausentes, no positivas o no finitas.
+
+H6 conserva los datos originales inconsistentes para su revisión.
+Los registros revisables se identifican como "Pendiente de revisión".
+
+La fecha de vencimiento permanece vigente durante todo ese día.
+La unidad pasa a Vencida a partir del día siguiente, según
+la zona horaria America/Santiago.
+
+La vida útil inicial de 20 días corresponde a la regla provisional
+heredada del proyecto. Debe validarse.
+
+#### Actualización automática
+
+Los vencimientos se actualizan:
+- Al iniciar la aplicación.
+- Al detectar un cambio de día mientras está abierta.
+- Antes de consultar el resumen o el detalle de stock.
+
+Las vistas de H6 se refrescan al mostrarse y al cambiar el minuto,
+además de permitir actualización manual.
+
+No se ejecutan procesos con la aplicación cerrada.
+Al volver a abrirla se actualizan los vencimientos pendientes.
+
+El archivo scripts/actualizar_vencimientos.bat permite ejecutar
+manualmente el proceso sin abrir la interfaz. No instala una
+tarea programada en Windows.
+
+Se agregó tzdata a las dependencias para disponer de la zona horaria
+America/Santiago en Windows.
+
+La inicialización agrega los elementos de H6 a la base existente
+sin borrar las donaciones. Respaldar la base antes de integrar cambios.
+
+#### Integración con H7
+
+H7 debe obtener el stock vigente mediante el servicio de H6:
+
+```python
+from servicios.vencimientos import consultar_stock_detallado
+
+datos = consultar_stock_detallado()
+
+for total in datos["totales"]:
+    grupo = total["grupo"]
+    rh = total["rh"]
+    unidades = total["unidades"]
+    litros = total["litros"]
+    proximo_vencimiento = total["proximo_vencimiento"]
+```
+
+.
