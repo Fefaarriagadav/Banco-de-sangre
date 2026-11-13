@@ -162,6 +162,10 @@ def mostrar_registro(pantalla, rol):
         if not math.isfinite(peso_ingresado) or peso_ingresado <=0:
             mensaje_error.configure(text="Debe ingresar un peso mayor a 0")
             return
+        if peso_ingresado < 50:
+            elegibilidad_ingresada = "Donante NO apto temporalmente"
+            elegibilidad.set(elegibilidad_ingresada)
+            
         if not email_ingresado:
             mensaje_error.configure(text="Debe ingressar una dirección de correo electronico")
             return
