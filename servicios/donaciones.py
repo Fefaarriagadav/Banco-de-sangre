@@ -43,14 +43,25 @@ def registrar_donacion(donante_id, cantidad, empleado_id, ruta=RUTA_BD, hoy=None
             (donante_id, extraccion)).fetchone()
         if donante is None:
             raise ValueError("No existe un donante apto con ese ID.")
+        #ubicaciones de donde se debe guardar la donación según el grupo sanguíneo y factor rh
+        grupo_completo = donante["GRUPO_SANGUINEO"] + donante["FACTOR_RH"]
+        if grupo_completo in ['O+', 'O-']:
+            ubicacion_asignada = "Refrigerador 1"
+        elif grupo_completo in ['A+', 'A-']:
+            ubicacion_asignada = "Refrigerador 2"
+        elif grupo_completo in ['B+', 'B-', 'AB+', 'AB-']:
+            ubicacion_asignada = "Refrigerador 3"
+        else:
+            ubicacion_asignada = "Cámara General"
+
         habilitacion = calcular_fecha_habilitacion(hoy, donante["SEXO"])
         # Las consultas de H4 consideran inclusivo el último día de restricción.
         fin = (habilitacion - timedelta(days=1)).isoformat()
         cursor = conexion.execute("""INSERT INTO DONACIONES (
             DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO,
-            TIPO_SANGRE, FACTOR_RH, ESTADO) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            TIPO_SANGRE, FACTOR_RH, ESTADO, UBICACION) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (donante_id, cantidad, extraccion, vencimiento,
-             donante["GRUPO_SANGUINEO"], donante["FACTOR_RH"], DISPONIBLE))
+             donante["GRUPO_SANGUINEO"], donante["FACTOR_RH"], DISPONIBLE, ubicacion_asignada))
         donacion_id = cursor.lastrowid
         conexion.execute("""UPDATE DONANTES SET FECHA_ULTIMA_DONACION = ?,
             ELEGIBLE = ?, INHABILITACION_INICIO = ?, INHABILITACION_FIN = ? WHERE ID = ?""",
@@ -64,4 +75,4 @@ def registrar_donacion(donante_id, cantidad, empleado_id, ruta=RUTA_BD, hoy=None
     return {"ID": donacion_id, "DONANTE": donante_id, "CANTIDAD": cantidad,
             "FECHA_EXTRACCION": extraccion, "FECHA_VENCIMIENTO": vencimiento,
             "GRUPO_SANGUINEO": donante["GRUPO_SANGUINEO"], "FACTOR_RH": donante["FACTOR_RH"],
-            "FECHA_HABILITACION": habilitacion.isoformat()}
+            "FECHA_HABILITACION": habilitacion.isoformat(), "UBICACION": ubicacion_asignada}

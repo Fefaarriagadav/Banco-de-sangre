@@ -67,6 +67,7 @@ def mostrar_adonacion(pantalla, rol, empleado_id):
         fecha_vencimiento_sql = donacion["FECHA_VENCIMIENTO"]
         rh_donacion = donacion["FACTOR_RH"]
         tipo_donacion = donacion["GRUPO_SANGUINEO"]
+        ubicacion_asignada = donacion["UBICACION"]
         mensaje_error.configure(
         text=f"Donacion registrada correctamente. ID: {id_donacion}",text_color="green")
         def mostrar_confirmacion(id_ingresado, cc_ingresados, fecha_extraccion_sql):
@@ -76,7 +77,7 @@ def mostrar_adonacion(pantalla, rol, empleado_id):
             titulo = ctk.CTkLabel(frame_confirmacion,text="¡Donancion registrada correctamente!",font=("Arial", 26, "bold"))
             titulo.pack(pady=30)
 
-            datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_ingresado}\n"f"ID de donacion: {id_donacion}\n"f"CC: {cc_ingresados}\n"f"Fecha: {fecha_extraccion_sql}\n"f"Fecha a vencer: {fecha_vencimiento_sql}\n"f"Rh: {rh_donacion}\n"f"Grupo: {tipo_donacion}",font=("Arial", 18),justify="left")
+            datos = ctk.CTkLabel(frame_confirmacion,text=f"ID del donante: {id_ingresado}\n"f"ID de donacion: {id_donacion}\n"f"CC: {cc_ingresados}\n"f"Fecha: {fecha_extraccion_sql}\n"f"Fecha a vencer: {fecha_vencimiento_sql}\n"f"Rh: {rh_donacion}\n"f"Grupo: {tipo_donacion}\n"f"Guardar en: {ubicacion_asignada}",font=("Arial", 18),justify="left")
             datos.pack(pady=20)
             ctk.CTkLabel(frame_confirmacion,
                          text="Donante NO apto temporalmente.\nFecha de habilitación: "
