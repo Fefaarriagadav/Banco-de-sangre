@@ -55,8 +55,8 @@ def mostrar_adonacion(pantalla, rol):
         if not cc_ingresados.replace('.', '', 1).isdigit():
             mensaje_error.configure(text="La cantidad deben ser un número")
             return
-        if float(cc_ingresados) < 0.1 or float(cc_ingresados) > 4000:
-            mensaje_error.configure(text="La cantidad debe estar entre 0.1 y 4000 cc")
+        if float(cc_ingresados) < 0.1 or float(cc_ingresados) > 450:
+            mensaje_error.configure(text="La cantidad debe estar entre 0.1 y 450 cc")
             return
         try: # donante existe
             consultar_donante(id_ingresado)
@@ -82,18 +82,10 @@ def mostrar_adonacion(pantalla, rol):
 
         cursor.execute(
             """
-            INSERT INTO DONACIONES (
-                DONANTE, CANTIDAD, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO,
-                TIPO_SANGRE, FACTOR_RH, ESTADO
-            )
+            INSERT INTO DONACIONES (DONANTE, TIPO_SANGRE, FACTOR_RH, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO, CANTIDAD, ESTADO)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                id_ingresado, cc_ingresados, fecha_extraccion_sql,
-                fecha_vencimiento_sql, tipo_donacion, rh_donacion, DISPONIBLE,
-            ),
-        )
-
+            """,(id_ingresado,tipo_donacion,rh_donacion,fecha_extraccion_sql, fecha_vencimiento_sql, cc_ingresados,DISPONIBLE))
+       
         id_donacion = cursor.lastrowid
         conexion.commit()
         conexion.close()
