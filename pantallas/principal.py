@@ -30,35 +30,59 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     boton_menu = ctk.CTkButton(frame_principal,text="☰", width=50, height=45, font=("Arial",28), fg_color="transparent", text_color="#333333", hover_color="#DDDDDD", command=alternar_menu)
     boton_menu.place(x=20, y=20) # donde se posiciona el boton de menu
 
+    def cargar_inicio():
+        for widget in frame_contenido.winfo_children():
+            widget.destroy()
+            
+        tarjeta_bienvenida = ctk.CTkFrame(frame_contenido,width=600, height=250, corner_radius=20,fg_color= "#FFFFFF")
+        tarjeta_bienvenida.place(relx=0.36, rely=0.25, anchor="center")
+        
+        titulo = ctk.CTkLabel(tarjeta_bienvenida, text="Banco de Sangre", font=("Arial", 30, "bold"), text_color="#000000")
+        titulo_nombre = ctk.CTkLabel(tarjeta_bienvenida, text=f"¡Bienvenid@, {nombre}!", font=("Arial", 30, "bold"), text_color="#000000")
+        titulo_rol = ctk.CTkLabel(tarjeta_bienvenida, text=f"Rol : {rol}", font=("Arial", 30, "bold"), text_color="#000000")
+        
+        titulo.place(relx=0.5,rely=0.2, anchor = "center")
+        titulo_nombre.place(relx=0.5, rely=0.5, anchor ="center")
+        titulo_rol.place(relx=0.5, rely=0.8, anchor="center")
+
+        mostrar_panel_vencimientos(frame_contenido)
+        
+        menu_lateral.place_forget()
+
+
+    
+    # Botón Inicio
+    boton_inicio = ctk.CTkButton(menu_lateral, text="🏠 Inicio", width=210, height=45, text_color="#000000", fg_color="#FCD34D", hover_color="#FBBF24", command=cargar_inicio)
+    boton_inicio.place(x=20, y=40)
+
     if rol == "Entrevistador": # solo el perosnal que tenga el rol asigando de entrevistador tiene el boton de agregar donante, y cuando se aprieta llama a la función mostrar_registro que esta en otro archivo por eso se importa
         boton_donante = ctk.CTkButton(menu_lateral, text="Agregar nuevo donante", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_registro(frame_contenido,rol))
-        boton_donante.place(x=20, y=40)
-        ctk.CTkButton(menu_lateral, text="Actualizar habilitación", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=100)
+        boton_donante.place(x=20, y=100)
+        ctk.CTkButton(menu_lateral, text="Actualizar habilitación", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=160)
 
     boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
-    boton_pedir_donaciones.place(x=20, y=160)
+    boton_pedir_donaciones.place(x=20, y=220)
 
     if rol == "Enfermero": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
-            boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
-            boton_donancion.place(x=20, y=280)
+        boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
+        boton_donancion.place(x=20, y=280)
 
-            def abrir_alertas():
-                mostrar_alertas_redistribucion(frame_contenido)
-                menu_lateral.place_forget()
+        def abrir_alertas():
+            mostrar_alertas_redistribucion(frame_contenido)
+            menu_lateral.place_forget()
 
-            boton_alertas_stock = ctk.CTkButton(
-                menu_lateral,
-                text="Alertas Sobreabastecimiento",
-                width=210,
-                height=45,
-                text_color="#000000",
-                fg_color="#FDBA74",
-                command=abrir_alertas
-            )
-            boton_alertas_stock.place(x=20, y=450)
+        boton_alertas_stock = ctk.CTkButton(menu_lateral, text="Alertas Sobreabastecimiento", width=210, height=45, text_color="#000000", fg_color="#FDBA74", command=abrir_alertas)
+        boton_alertas_stock.place(x=20, y=340)
 
     boton_lista_donaciones = ctk.CTkButton(menu_lateral, text="Lista de donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_lista_donaciones(frame_contenido))
-    boton_lista_donaciones.place(x=20, y=330)
+    boton_lista_donaciones.place(x=20, y=400)
+
+    def abrir_stocks():
+        mostrar_stocks(frame_contenido)
+        menu_lateral.place_forget()
+
+    boton_stocks = ctk.CTkButton(menu_lateral, text="Stocks", width=210, height=45, text_color="#FFFFFF", fg_color="#0D9488", command=abrir_stocks)
+    boton_stocks.place(x=20, y=460)
 
     def cerrar_sesion():
         frame_principal.destroy()
@@ -67,36 +91,6 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
     boton_cerrar_sesion = ctk.CTkButton(menu_lateral, text="Cerrar sesión", width=210, height=45, text_color="#FFFFFF", fg_color="#FF0000", command=cerrar_sesion)
     boton_cerrar_sesion.place(x=20, y=655)
 
-    #la tarjeta de bienvenida se crea en el frame de contenido, se crea un recuadro donde trabajar esta tarjeta
-    #se crea el titulo y donde se posiciona y lo mismo con el rol, el nombre y el rol se exraen de la base de datos
-    tarjeta_bienvenida = ctk.CTkFrame(frame_contenido,width=600, height=250, corner_radius=20,fg_color= "#FFFFFF")
-    tarjeta_bienvenida.place(
-        relx=0.36,
-        rely=0.25,
-        anchor="center",
-    )
-    titulo = ctk.CTkLabel(tarjeta_bienvenida, text="Banco de Sangre", font=("Arial", 30, "bold"), text_color="#000000")
-    titulo_nombre = ctk.CTkLabel(tarjeta_bienvenida, text=f"¡Bienvenid@, {nombre}!", font=("Arial", 30, "bold"), text_color="#000000")
-    titulo_rol = ctk.CTkLabel(tarjeta_bienvenida, text=f"Rol : {rol}", font=("Arial", 30, "bold"), text_color="#000000")
-    titulo.place(relx=0.5,rely=0.2, anchor = "center")
-    titulo_nombre.place(relx=0.5, rely=0.5, anchor ="center")
-    titulo_rol.place(relx=0.5, rely=0.8, anchor="center")
-
-    # H6-T2: resumen y alertas en la ventana principal.
-    mostrar_panel_vencimientos(frame_contenido)
-    def abrir_stocks():
-        mostrar_stocks(frame_contenido)
-        menu_lateral.place_forget()
-
-    boton_stocks = ctk.CTkButton(
-        menu_lateral,
-        text="Stocks",
-        width=210,
-        height=45,
-        text_color="#FFFFFF",
-        fg_color="#0D9488",
-        command=abrir_stocks,
-    )
-    boton_stocks.place(x=20, y=390)
-
+    cargar_inicio()
+    
     boton_menu.lift()
