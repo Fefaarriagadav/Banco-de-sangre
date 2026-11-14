@@ -48,40 +48,36 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
         mostrar_panel_vencimientos(frame_contenido)
         
         menu_lateral.place_forget()
-
-
     
     # Botón Inicio
     boton_inicio = ctk.CTkButton(menu_lateral, text="🏠 Inicio", width=210, height=45, text_color="#000000", fg_color="#FCD34D", hover_color="#FBBF24", command=cargar_inicio)
     boton_inicio.place(x=20, y=40)
+    boton_donante = ctk.CTkButton(menu_lateral, text="Agregar nuevo donante 🧬", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_registro(frame_contenido,rol))
+    boton_donante.place(x=20, y=100)
+    ctk.CTkButton(menu_lateral, text="Actualizar habilitación 🩺", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id, rol)).place(x=20, y=160)
 
-    if rol == "Entrevistador": # solo el perosnal que tenga el rol asigando de entrevistador tiene el boton de agregar donante, y cuando se aprieta llama a la función mostrar_registro que esta en otro archivo por eso se importa
-        boton_donante = ctk.CTkButton(menu_lateral, text="Agregar nuevo donante", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_registro(frame_contenido,rol))
-        boton_donante.place(x=20, y=100)
-        ctk.CTkButton(menu_lateral, text="Actualizar habilitación", width=210, height=45, command=lambda: mostrar_evaluacion(frame_contenido, empleado_id)).place(x=20, y=160)
-
-    boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_pedir_donaciones(frame_contenido))
+    boton_pedir_donaciones = ctk.CTkButton(menu_lateral, text="Pedir donaciones 📤", width=210, height=45, text_color="#000000", fg_color="#7BDA92", command=lambda: mostrar_pedir_donaciones(frame_contenido))
     boton_pedir_donaciones.place(x=20, y=220)
 
-    if rol == "Enfermero": # solo el personal que tenga el rol asigando de entrevistador tiene el boton de agregar donacion, y cuando se aprieta llama a la función mostrar_adonacion que esta en otro archivo por eso se importa
-        boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación", width=210, height=45, text_color="#000000", fg_color="#C0F1FF", command=lambda: mostrar_adonacion(frame_contenido,rol))
-        boton_donancion.place(x=20, y=280)
+    
+    boton_donancion = ctk.CTkButton(menu_lateral, text="Agregar nueva donación 🩸", width=210, height=45, text_color="#000000", fg_color="#B4EBC8", command=lambda: mostrar_adonacion(frame_contenido,rol,empleado_id))
+    boton_donancion.place(x=20, y=280)
 
-        def abrir_alertas():
-            mostrar_alertas_redistribucion(frame_contenido)
-            menu_lateral.place_forget()
+    def abrir_alertas():
+        mostrar_alertas_redistribucion(frame_contenido)
+        menu_lateral.place_forget()
 
-        boton_alertas_stock = ctk.CTkButton(menu_lateral, text="Alertas Sobreabastecimiento", width=210, height=45, text_color="#000000", fg_color="#FDBA74", command=abrir_alertas)
-        boton_alertas_stock.place(x=20, y=340)
+    boton_alertas_stock = ctk.CTkButton(menu_lateral, text="Alertas Sobreabastecimiento 📈", width=210, height=45, text_color="#000000", fg_color="#EB9567", command=abrir_alertas)
+    boton_alertas_stock.place(x=20, y=400)
 
-    boton_lista_donaciones = ctk.CTkButton(menu_lateral, text="Lista de donaciones", width=210, height=45, text_color="#000000", fg_color="#0D9488", command=lambda: mostrar_lista_donaciones(frame_contenido))
-    boton_lista_donaciones.place(x=20, y=400)
+    boton_lista_donaciones = ctk.CTkButton(menu_lateral, text="Lista de donaciones 🧾", width=210, height=45, text_color="#000000", fg_color="#F0F084", command=lambda: mostrar_lista_donaciones(frame_contenido))
+    boton_lista_donaciones.place(x=20, y=340)
 
     def abrir_stocks():
         mostrar_stocks(frame_contenido)
         menu_lateral.place_forget()
 
-    boton_stocks = ctk.CTkButton(menu_lateral, text="Stocks", width=210, height=45, text_color="#FFFFFF", fg_color="#0D9488", command=abrir_stocks)
+    boton_stocks = ctk.CTkButton(menu_lateral, text="Stocks 📦", width=210, height=45, text_color="#FFFFFF", fg_color="#6EAAE6", command=abrir_stocks)
     boton_stocks.place(x=20, y=460)
 
     def cerrar_sesion():

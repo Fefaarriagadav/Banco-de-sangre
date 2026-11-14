@@ -129,7 +129,7 @@ def buscar_sangre(grupo, rh, ruta=RUTA_BD):
     """Donaciones de un grupo y RH."""
     with conectar(ruta) as conexion:
         filas = conexion.execute(
-            "SELECT DONANTE, CANTIDAD, TIPO_SANGRE, FACTOR_RH FROM DONACIONES "
+            "SELECT DONANTE, CANTIDAD, TIPO_SANGRE, FACTOR_RH, UBICACION FROM DONACIONES "
             "WHERE TIPO_SANGRE = ? AND FACTOR_RH = ?",
             (grupo, rh)).fetchall()
     return [tuple(fila) for fila in filas]

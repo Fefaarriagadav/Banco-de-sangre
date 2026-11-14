@@ -4,7 +4,11 @@ from datetime import date
 from servicios.elegibilidad import (RESULTADOS, TEMPORAL, FORMATO_FECHA, consultar_donante, guardar_resultado, describir_estado)
 
 
-def mostrar_evaluacion(pantalla, empleado_id):
+def mostrar_evaluacion(pantalla, empleado_id,rol):
+    if rol != "Entrevistador":
+            from tkinter import messagebox
+            messagebox.showerror("Acceso denegado", "No tiene autorización para registrar donantes")
+            return
     # Limpia el contenido anterior antes de mostrar esta pantalla.
     for widget in pantalla.winfo_children():
         widget.destroy()

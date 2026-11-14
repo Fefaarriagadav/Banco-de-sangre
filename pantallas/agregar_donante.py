@@ -162,6 +162,10 @@ def mostrar_registro(pantalla, rol):
         if not math.isfinite(peso_ingresado) or peso_ingresado <=0:
             mensaje_error.configure(text="Debe ingresar un peso mayor a 0")
             return
+        if peso_ingresado < 50:
+            elegibilidad_ingresada = "Donante NO apto temporalmente"
+            elegibilidad.set(elegibilidad_ingresada)
+            
         if not email_ingresado:
             mensaje_error.configure(text="Debe ingressar una dirección de correo electronico")
             return
@@ -191,13 +195,12 @@ def mostrar_registro(pantalla, rol):
 
         conexion = sqlite3.connect(RUTA_BD)
         cursor = conexion.cursor()
-        id_donante = cursor.lastrowid
 
         cursor.execute("""INSERT INTO DONANTES (NOMBRE, APELLIDO, EDAD, SEXO, GRUPO_SANGUINEO, FACTOR_RH, FECHA_ULTIMA_DONACION, PESO, EMAIL, ELEGIBLE, FECHA_DE_NACIMIENTO)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)""", (nombre_ingresado, apellido_ingresado, edad_calculada, sexo_ingresado, ts_ingresado, rh_ingresado,
             ultima_donacion_sql, peso_ingresado, email_ingresado, elegibilidad_ingresada, fecha_nacimiento_sql))
 
-        
+        id_donante = cursor.lastrowid
         conexion.commit()
         conexion.close()
         mensaje_error.configure(

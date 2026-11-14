@@ -54,7 +54,7 @@ def mostrar_lista_donaciones(pantalla):
     frame_resultados = ctk.CTkScrollableFrame(frame_filtro,label_text="Donaciones encontradas")
     frame_resultados.place(relx=0.5,rely=0.50,anchor="n",relwidth=0.6,relheight=0.30)
 
-    for columna in range(3):
+    for columna in range(5):
         frame_resultados.grid_columnconfigure(columna, weight=1)
 
     total_donanciones = ctk.CTkLabel(frame_filtro,text="Total de donaciones encontradas: 0",font=("Arial", 20, "bold"))
@@ -99,14 +99,14 @@ def mostrar_lista_donaciones(pantalla):
         filtros_buscados = (ts_seleccionado, rh_bd)
 
         total_donanciones.configure(text=f"Total de donaciones encontradas: {len(donaciones_encontradas)}")
-        encabezados = ["Donador","Cantidad (cc)","Grupo sanguíneo","Factor Rh"]
+        encabezados = ["Donador","Cantidad (cc)","Grupo sanguíneo","Factor Rh", "Ubicación"]
 
         for columna, encabezado in enumerate(encabezados):
             etiqueta = ctk.CTkLabel(frame_resultados,text=encabezado,font=("Arial", 15, "bold"))
             etiqueta.grid(row=0,column=columna,padx=15,pady=10)
 
         for fila, donacion in enumerate(donaciones_encontradas, start=1):
-            for columna, dato in enumerate(donacion[:4]):
+            for columna, dato in enumerate(donacion[:5]):
                 etiqueta = ctk.CTkLabel(frame_resultados,text=str(dato),font=("Arial", 14))
                 etiqueta.grid(row=fila,column=columna,padx=15,pady=5)
 
