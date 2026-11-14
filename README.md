@@ -18,12 +18,6 @@ python -m pip install -r requirements.txt
 python pantalla.py
 ```
 
-Si el proyecto incluye `main.py` como punto de entrada, también puede iniciarse mediante:
-
-```powershell
-python main.py
-```
-
 En macOS, puede ser necesario utilizar `python3` en lugar de `python`.
 
 ## Organización del proyecto
