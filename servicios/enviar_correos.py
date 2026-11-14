@@ -16,12 +16,25 @@ def enviar_correo(destinatario):
     mensaje = EmailMessage()
     mensaje["From"] = correo
     mensaje["To"] = destinatario
-    mensaje["Subject"] = "Necesitamos tu ayuda - Banco de Sangre"
+    mensaje["Subject"] = "Tu donación puede salvar vidas | Banco de Sangre"
 
-    mensaje.set_content("Estimado donante," \
-    " nos gustaría informarle que necesitamos su ayuda para continuar con nuestro programa de donación de sangre." \
-    "Actualmente el banco de sangre necesita donaciones de su tipo de sangre. Su contribución puede salvar vidas y marcar la diferencia en nuestra comunidad." \
-    "Si está dispuesto a ayudarnos, por favor considere programar una cita para donar sangre.")
+    mensaje.set_content("Estimado/a donante:\n\n"
+    "Esperamos que se encuentre muy bien.\n\n"
+    "Nos comunicamos con usted desde el Banco de Sangre porque "
+    "actualmente necesitamos reforzar nuestras reservas de sangre "
+    "y su colaboración podría ser de gran ayuda.\n\n"
+    "Cada donación representa una oportunidad de salvar vidas y "
+    "brindar esperanza a pacientes que necesitan transfusiones "
+    "o tratamientos médicos.\n\n"
+    "¡Su solidaridad puede marcar la diferencia!\n\n"
+    "Si se encuentra en condiciones de donar y desea colaborar, "
+    "le invitamos a acercarse a nuestro banco de sangre o "
+    "contactarnos para conocer los pasos necesarios para "
+    "realizar una donación.\n\n"
+    "Agradecemos sinceramente su tiempo, disposición y compromiso "
+    "con el bienestar de nuestra comunidad.\n\n"
+    "Atentamente,\n"
+    "Equipo del Banco de Sangre")
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as servidor:
         servidor.login(correo, contrasena)

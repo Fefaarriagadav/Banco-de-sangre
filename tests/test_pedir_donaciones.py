@@ -264,7 +264,7 @@ class EnviarCorreosTest(unittest.TestCase):
         self.assertEqual(mensaje['From'], 'pruebas@example.invalid')
         self.assertEqual(mensaje['To'], 'destinatario@example.invalid')
         self.assertIn('Banco de Sangre', mensaje['Subject'])
-        self.assertIn('donación de sangre', mensaje.get_content())
+        self.assertIn('Banco de Sangre', mensaje.get_content())
 
     def test_error_de_servidor_se_propaga_sin_envios_reales(self):
         with patch.object(correo_servicio, 'correo', 'pruebas@example.invalid'), \
