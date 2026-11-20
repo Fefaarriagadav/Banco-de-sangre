@@ -15,6 +15,7 @@ Aplicación de escritorio desarrollada en *Python, CustomTkinter y SQLite* para 
    - [H5: Registro de donaciones](#h5-registro-de-donaciones)
    - [H6: Vencimientos, alertas y stock](#h6-vencimientos-alertas-y-stock)
    - [Alertas de sobreabastecimiento y redistribución](#alertas-de-sobreabastecimiento-y-redistribución)
+   - [HU10: Despacho programado](#hu10-despacho-programado)
 5. [Configuración del correo electrónico](#configuración-del-correo-electrónico)
 6. [Integración con H7](#integración-con-h7)
 7. [Seguridad y consideraciones](#seguridad-y-consideraciones)
@@ -238,6 +239,26 @@ Detecta grupos sanguíneos con exceso de stock y sugiere hospitales a los que re
 - Solo se cuentan unidades en estado Disponible.
 - El botón *Ver Destinos* muestra los hospitales de la tabla HOSPITALES que requieren ese grupo y Rh (con cantidad requerida mayor que 0). La consulta no modifica el inventario.
 - *Actualizar Alertas* vuelve a consultar. Sin alertas, la pantalla indica "Niveles normales".
+
+### HU10: Despacho programado
+
+Selecciona un centro registrado en **Hospital/Clínica**, confirma el acceso y abre
+**Programar despacho** desde el inventario. Completa grupo sanguíneo, factor Rh y cantidad de bolsas de sangre (un entero
+positivo). Elige día, mes, año, hora y minuto en los selectores. Confirma la
+dirección de entrega que se muestra, tomada del centro con el que ingresaste.
+Por ahora se admite cualquier fecha y hora futura en `America/Santiago`, sin un
+plazo adicional de anticipación.
+
+Al guardar, la aplicación muestra el identificador y el estado **Pendiente**.
+En **Mis solicitudes** se pueden volver a consultar los datos del centro activo,
+incluso después de reiniciar. La solicitud pendiente no reserva ni descuenta stock.
+
+El prototipo usa el catálogo `CENTROS_MEDICOS` como criterio de acceso. El servicio
+verifica el centro al registrar y consultar. La selección de HU09 no autentica a
+la persona que usa la aplicación. La inicialización conserva el catálogo existente
+y crea las tablas faltantes. La base ficticia generada con
+`python scripts/crear_base_demo.py` incluye el **Hospital de demostración** para probar
+el flujo usando `BANCO_SANGRE_BD` con la ruta de esa base.
 
 ## Configuración del correo electrónico
 
