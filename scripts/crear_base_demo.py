@@ -39,6 +39,10 @@ def crear_demo():
 
     with closing(sqlite3.connect(ruta)) as conexion, conexion:
         conexion.execute(
+            "INSERT INTO CENTROS_MEDICOS (NOMBRE, DIRECCION, COMUNA) VALUES (?, ?, ?)",
+            ("Hospital de demostración", "Dirección de prueba", "Concepción"),
+        )
+        conexion.execute(
             """
             INSERT INTO PERSONAL (
                 ID_EMPLEADO, RUT, NOMBRE, ROL

@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import sqlite3
+from contextlib import closing
 from datos.configuracion import RUTA_BD
 from pantallas.stock_hospitales import mostrar_stock_hospitales
 
@@ -14,13 +15,24 @@ def acceso_clinica(pantalla, volver_login):
     mensaje = ctk.CTkLabel(frame_acceso, text="Acceso Hospital/Clinica", text_color="#000000", height = 80, width = 280, font=("Arial", 30)) #estructura del mensaje
     mensaje.place(relx=0.5, rely= 0.2,anchor = "center") #donde se veera el mensaje
 
-    clin_hosp = ["Clínica Andes Salud Concepción", "Clínica del Sur Achs Salud", "Sanatorio Alemán", "Clínica Biobío", "Hospital Clínico Regional de Concepción", "Hospital Las Higueras de Talcahuano", "Hospital de Lota", "Hospital de Coronel", "Hospital de Mulchén", "Hospital de Nacimiento", "Hospital de Yumbel", "Hospital de Tomé", "Hospital de Penco", "Hospital Traumatológico de Concepción", "Hospital Naval Almirante Adriazola", "Hospital Clínico IST del Biobío", "Hospital Clorinda Avello", "Hospital San Agustín de Florida", "Hospital Provincial Dr. Rafael Avaria Valenzuela", "Clínica San Pedro"]
-    clin_hosp = ["Seleccione"] + sorted(clin_hosp, key=str.casefold)
+    error_catalogo = ""
+    try:
+        with closing(sqlite3.connect(RUTA_BD)) as conexion:
+            centros = sorted(
+                (fila[0] for fila in conexion.execute("SELECT NOMBRE FROM CENTROS_MEDICOS")),
+                key=str.casefold,
+            )
+        if not centros:
+            error_catalogo = "No hay centros médicos registrados."
+    except sqlite3.Error:
+        centros = []
+        error_catalogo = "No se pudo cargar el catálogo de centros médicos."
+    clin_hosp = ["Seleccione", *centros]
     centros_medicos = ctk.CTkOptionMenu(frame_acceso,values=clin_hosp,width=280,height=55,font=("Arial", 17))
     centros_medicos.set("Seleccione")
     centros_medicos.place(relx=0.5, rely=0.35, anchor="center")
 
-    mensaje_error = ctk.CTkLabel(frame_acceso,text="",text_color="red",font=("Arial", 16))
+    mensaje_error = ctk.CTkLabel(frame_acceso,text=error_catalogo,text_color="red",font=("Arial", 16))
     mensaje_error.place(relx=0.5,rely=0.6,anchor="center")
 
     def confirmar_acceso(): # Obtener el centro médico seleccionado
@@ -33,13 +45,11 @@ def acceso_clinica(pantalla, volver_login):
 
         # Buscar los datos del centro en SQLite
         try:
-            conexion = sqlite3.connect(RUTA_BD)
-            try:
-                cursor = conexion.cursor()
-                cursor.execute("""SELECT NOMBRE, DIRECCION, COMUNA FROM CENTROS_MEDICOS WHERE NOMBRE = ? """, (centro_seleccionado,))
-                resultado = cursor.fetchone()
-            finally:
-                conexion.close()
+            with closing(sqlite3.connect(RUTA_BD)) as conexion:
+                resultado = conexion.execute(
+                    "SELECT NOMBRE, DIRECCION, COMUNA FROM CENTROS_MEDICOS WHERE NOMBRE = ?",
+                    (centro_seleccionado,),
+                ).fetchone()
 
         except sqlite3.Error:
             mensaje_error.configure(text="No se pudo consultar la base de datos")
@@ -90,7 +100,13 @@ def acceso_clinica(pantalla, volver_login):
         boton_confirmar.pack(side="left", padx=10)
 
     boton_acceder = ctk.CTkButton(frame_acceso, text="Acceder", command=confirmar_acceso, fg_color="gray", hover_color="dimgray", width=200, height=50)
+    if not centros:
+        boton_acceder.configure(state="disabled")
     boton_acceder.place(relx=0.5, rely=0.5, anchor="center")
 
-    boton_volver = ctk.CTkButton(frame_acceso, text="Volver", command=volver_login, fg_color="gray", hover_color="dimgray", width=100, height=25)
+    def cancelar_acceso():
+        frame_acceso.destroy()
+        volver_login()
+
+    boton_volver = ctk.CTkButton(frame_acceso, text="Volver", command=cancelar_acceso, fg_color="gray", hover_color="dimgray", width=100, height=25)
     boton_volver.place(relx=0.5, rely=0.9, anchor="center")
