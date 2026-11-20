@@ -1,9 +1,11 @@
 import customtkinter as ctk
 import sqlite3
 from datetime import datetime
+from pantallas.despacho_programado import mostrar_despacho_programado
 from servicios.vencimientos import consultar_stock_detallado
 
 def mostrar_stock_hospitales(pantalla, nombre_centro, volver_login):
+    pantalla.title("Banco de sangre - Inventario disponible")
     #colores
     FONDO = "#F3F5F9"
     AZUL_OSCURO = "#193653"
@@ -105,8 +107,18 @@ def mostrar_stock_hospitales(pantalla, nombre_centro, volver_login):
     boton_actualizar = ctk.CTkButton(frame_botones,text="⟳  Actualizar inventario",command=actualizar_stock,width=260,height=48,corner_radius=12,fg_color="#2563EB",hover_color="#1D4ED8",font=("Arial", 16, "bold"))
     boton_actualizar.pack(side="left", padx=8)
 
-    #boton solicitar unidades de sangre (deshabilitado por ahora)
-    boton_solicitar = ctk.CTkButton(frame_botones,text="Solicitar unidades de sangre",width=300,height=48,corner_radius=12,fg_color="#16A34A",hover_color="#15803D",font=("Arial", 16, "bold"),state="disabled")
+    def abrir_despacho():
+        frame_stock.destroy()
+        mostrar_despacho_programado(
+            pantalla, nombre_centro,
+            lambda: mostrar_stock_hospitales(pantalla, nombre_centro, volver_login),
+        )
+
+    boton_solicitar = ctk.CTkButton(
+        frame_botones, text="Programar despacho", command=abrir_despacho,
+        width=300, height=48, corner_radius=12, fg_color="#16A34A",
+        hover_color="#15803D", font=("Arial", 16, "bold"),
+    )
     boton_solicitar.pack(side="left", padx=8)
 
     #boton de volver
