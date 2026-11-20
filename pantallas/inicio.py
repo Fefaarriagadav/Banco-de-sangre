@@ -4,6 +4,7 @@ from servicios.vencimientos import iniciar_actualizacion
 from pantallas.principal import mostrar_principal
 from datos.configuracion import RUTA_BD
 from datos.basededatos import inicializar_base
+from pantallas.acceso_clinica import acceso_clinica
 
 
 def iniciar_app():
@@ -22,6 +23,7 @@ def iniciar_app():
     caja_id = ctk.CTkEntry(frame_login, placeholder_text= "Ingrese su ID", height = 80, width = 300, font =("Arial", 30))
     caja_id.place(relx=0.5, rely=0.4, anchor="center") #donde se posiciona la caja de id en la pantalla
     caja_id.bind("<Return>", lambda event: inciar_sesion()) #cuando se apreta enter llama a la función de iniciar sesión
+
 
     def volver_login():
         caja_id.delete(0, "end")
@@ -56,8 +58,10 @@ def iniciar_app():
             caja_id.delete(0, "end")
     
     #Boton para que se genere la busqueda, si se aprieta el boton llama a la función de inciar sesión
-    boton = ctk.CTkButton(frame_login, text="Ingresar", command= inciar_sesion,fg_color="gray",hover_color="dimgray")
+    boton = ctk.CTkButton(frame_login, text="Ingresar", command= inciar_sesion,fg_color="gray",hover_color="dimgray", width=200, height=50) #boton para que el personal pueda ingresar a la aplicación
     boton.place(relx=0.5, rely=0.5, anchor="center") #donde se ve el boton de ingresar en la pantalla
-    
-    
+
+    boton_hospital = ctk.CTkButton(frame_login, text="Hospital/Clinica 🏥", command=lambda: acceso_clinica(pantalla, volver_login), fg_color="red", hover_color="dimgray", width=200, height=50) #boton para que el hospital pueda ingresar a la aplicación
+    boton_hospital.place(relx=0.5, rely=0.6, anchor="center")
+
     pantalla.mainloop() #mantiene la aplicación abierta 
