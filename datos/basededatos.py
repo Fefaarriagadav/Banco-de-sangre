@@ -1,5 +1,6 @@
 import sqlite3
 from datos.configuracion import RUTA_BD
+from servicios.despachos import migrar_despachos
 from servicios.vencimientos import migrar
 
 
@@ -62,6 +63,8 @@ def inicializar_base(ruta=RUTA_BD):
         FECHA_CAMBIO TEXT NOT NULL)''')
     
     migrar(conexion) #H6 agrega ESTADO e índice de vencimiento sin borrar datos previos
+
+    migrar_despachos(conexion)
 
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos
