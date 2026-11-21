@@ -7,6 +7,9 @@ from pantallas.agregar_donacion import mostrar_adonacion
 from pantallas.panel_vencimientos import mostrar_panel_vencimientos
 from pantallas.stocks import mostrar_stocks
 from pantallas.alertas_redistribucion import mostrar_alertas_redistribucion
+from pantallas.solicitudes_pendientes import mostrar_solicitudes_pendientes
+from servicios.despachos import consultar_solicitudes_pendientes
+import sqlite3
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
     #se divide en frames para hacer mas facil el trabajo de cambio de pantallas y los clicks 
@@ -46,7 +49,44 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
         titulo_rol.place(relx=0.5, rely=0.8, anchor="center")
 
         mostrar_panel_vencimientos(frame_contenido)
-        
+
+        #solicitudes pendientes
+        tarjeta_solicitudes = ctk.CTkFrame(frame_contenido,width=580,height=225,fg_color="#FFFFFF",corner_radius=18,border_width=1,border_color="#E2E8F0")
+        tarjeta_solicitudes.place(relx=0.36,rely=0.72,anchor="center")
+        tarjeta_solicitudes.pack_propagate(False)
+        ctk.CTkLabel(tarjeta_solicitudes,text="📋 Solicitudes de despacho pendientes",font=("Arial", 21, "bold"),text_color="#193653").pack(pady=(15, 8))
+        label_emergencias = ctk.CTkLabel(tarjeta_solicitudes,text="Consultando emergencias...",font=("Arial", 18, "bold"),text_color="#C62828")
+        label_emergencias.pack(pady=2)
+        label_programadas = ctk.CTkLabel(tarjeta_solicitudes,text="",font=("Arial", 15),text_color="#64748B")
+        label_programadas.pack(pady=2)
+
+        #consulta las solicitudes desde la base de datos
+        def actualizar_alertas_solicitudes():
+            try:
+                solicitudes = consultar_solicitudes_pendientes()
+                emergencias = sum(1 for solicitud in solicitudes
+                    if solicitud["TIPO"] == "Emergencia")
+                programadas = sum(1 for solicitud in solicitudes
+                    if solicitud["TIPO"] == "Programado")
+                if emergencias > 0:
+                    label_emergencias.configure(text=f"🚨 {emergencias} emergencias pendientes",text_color="#C62828")
+                else:
+                    label_emergencias.configure(text="No hay emergencias pendientes",text_color="#15803D")
+
+                label_programadas.configure(text=f"📅 {programadas} despachos programados pendientes")
+
+            except sqlite3.Error:
+                label_emergencias.configure(text="No se pudieron consultar las solicitudes",text_color="#C62828")
+                label_programadas.configure(text="")
+
+        #botones en la ventana
+        botones_alertas = ctk.CTkFrame(tarjeta_solicitudes,fg_color="transparent")
+        botones_alertas.pack(pady=(14, 8))
+        ctk.CTkButton(botones_alertas,text="Revisar solicitudes",command=abrir_solicitudes,width=210,height=38,fg_color="#193653",hover_color="#284B6D",font=("Arial", 14, "bold")).pack(side="left", padx=8)
+        ctk.CTkButton(botones_alertas,text="⟳ Actualizar",command=actualizar_alertas_solicitudes,width=140,height=38,fg_color="#64748B",hover_color="#475569",font=("Arial", 14)).pack(side="left", padx=8)
+
+        #cargar al inicio
+        actualizar_alertas_solicitudes()
         menu_lateral.place_forget()
     
     # Botón Inicio
@@ -77,6 +117,10 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
         mostrar_stocks(frame_contenido)
         menu_lateral.place_forget()
 
+    def abrir_solicitudes():
+        mostrar_solicitudes_pendientes(frame_contenido,rol,empleado_id,lambda: mostrar_pedir_donaciones(frame_contenido))
+        menu_lateral.place_forget()
+
     boton_stocks = ctk.CTkButton(menu_lateral, text="Stocks 📦", width=210, height=45, text_color="#FFFFFF", fg_color="#6EAAE6", command=abrir_stocks)
     boton_stocks.place(x=20, y=460)
 
@@ -84,6 +128,8 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
         frame_principal.destroy()
         volver_login()
 
+    boton_solicitudes = ctk.CTkButton(menu_lateral,text="Solicitudes de despacho 📋",command=abrir_solicitudes,width=210,height=45,fg_color="#193653",text_color="#FFFFFF")
+    boton_solicitudes.place(x=20, y=520)
     boton_cerrar_sesion = ctk.CTkButton(menu_lateral, text="Cerrar sesión", width=210, height=45, text_color="#FFFFFF", fg_color="#FF0000", command=cerrar_sesion)
     boton_cerrar_sesion.place(x=20, y=655)
 
