@@ -10,6 +10,7 @@ from servicios.despachos import (
     PENDIENTE,
     consultar_despachos,
     consultar_direccion_despacho,
+    consultar_volumen_disponible,
     registrar_despacho,
 )
 from servicios.vencimientos import fecha_actual
@@ -111,7 +112,7 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         "fg_color": CAMPO, "button_color": BOTON_CAMPO, "button_hover_color": BORDE,
         "text_color": TINTA, "font": ("Arial", 13), "height": 34, "corner_radius": 8,
     }
-    bolsas = seccion("Unidades solicitadas")
+    bolsas = seccion("Volumen solicitado")
     for columna in range(3):
         bolsas.columnconfigure(columna, weight=1, uniform="bolsas")
     grupo = ctk.CTkOptionMenu(bolsas, values=list(GRUPOS), width=140, **estilo_menu)
@@ -119,14 +120,14 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
     rh = ctk.CTkOptionMenu(bolsas, values=list(FACTORES_RH), width=140, **estilo_menu)
     rh.set("Seleccione")
     cantidad = ctk.CTkEntry(
-        bolsas, placeholder_text="Ej. 3", width=140, height=34, corner_radius=8,
+        bolsas, placeholder_text="Ej. 450", width=140, height=34, corner_radius=8,
         fg_color=CAMPO, border_color=BORDE, border_width=1,
         text_color=TINTA, placeholder_text_color=TEXTO_SECUNDARIO, font=("Arial", 13),
     )
     for columna, (nombre, control) in enumerate((
         ("Tipo de sangre", grupo),
         ("Factor Rh", rh),
-        ("Cantidad de bolsas de sangre", cantidad),
+        ("Volumen requerido (mL)", cantidad),
     )):
         margen = (0, 14) if columna < 2 else (0, 0)
         etiqueta(bolsas, nombre).grid(row=0, column=columna, sticky="ew", padx=margen)
@@ -139,6 +140,22 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         control.set(inicial)
         control.grid(row=1, column=columna, sticky="w", padx=(0, 8), pady=(3, 0))
         return control
+
+    disponibilidad = ctk.CTkLabel(formulario,text="Selecciona grupo y Rh para consultar los mL disponibles.",text_color=TEXTO_SECUNDARIO,font=("Arial", 13))
+    disponibilidad.pack(anchor="w", padx=12, pady=(0, 8))
+
+    def actualizar_disponibilidad(_=None):
+        if grupo.get() not in GRUPOS or rh.get() not in FACTORES_RH:
+            disponibilidad.configure(text="Selecciona grupo y Rh para consultar disponibilidad.")
+            return
+        try:
+            ml = consultar_volumen_disponible(centro,grupo.get(),rh.get())
+            disponibilidad.configure(text=f"Volumen disponible: {ml} mL ({ml / 1000:.2f} L)")
+        except (sqlite3.Error, PermissionError, ValueError):
+            disponibilidad.configure(text="No se pudo consultar el volumen disponible.")
+
+    grupo.configure(command=actualizar_disponibilidad)
+    rh.configure(command=actualizar_disponibilidad)
 
     programacion = seccion("Programación")
     programacion.columnconfigure(0, weight=1)
@@ -234,6 +251,7 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         hora.set("—")
         minuto.set("00")
         confirmar_direccion.deselect()
+        actualizar_disponibilidad()
         mostrar_mensaje(
             f"Solicitud #{solicitud_id} registrada. Estado: {PENDIENTE}.",
             ("#166534", "#86EFAC"),
@@ -248,7 +266,7 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         state="normal" if direccion else "disabled",
     ).pack(side="right")
     ctk.CTkLabel(
-        acciones_formulario, text="La solicitud queda pendiente y no reserva unidades.",
+        acciones_formulario,text="Solicitud pendiente de aprobación. No reserva bolsas.",
         anchor="w", justify="left", wraplength=360, text_color=TEXTO_SECUNDARIO,
         font=("Arial", 13),
     ).pack(side="left", padx=(3, 10))
@@ -269,8 +287,9 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         except PermissionError as error:
             mostrar_mensaje_consulta(str(error))
             return
-        except sqlite3.Error:
-            mostrar_mensaje_consulta("No se pudieron consultar las solicitudes.")
+        except sqlite3.Error as error:
+            print("ERROR SQLITE AL CONSULTAR SOLICITUDES:", error)
+            mostrar_mensaje_consulta(f"No se pudieron consultar las solicitudes: {error}")
             return
 
         if not solicitudes:
@@ -279,11 +298,15 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
             tarjeta = ctk.CTkFrame(lista)
             tarjeta.pack(fill="x", padx=8, pady=(0, 8))
             fecha_visible = date.fromisoformat(solicitud["FECHA_DESPACHO"]).strftime("%d-%m-%Y")
-            cantidad_pedida = solicitud["CANTIDAD"]
-            unidad = "bolsa" if cantidad_pedida == 1 else "bolsas"
+            volumen = solicitud["VOLUMEN_ML"]
+            if volumen is not None:
+                cantidad_visible = f"{volumen} mL ({volumen / 1000:.2f} L)"
+            else:
+                antiguo = solicitud["CANTIDAD"]
+                cantidad_visible = f"{antiguo} bolsas (solicitud anterior)"
             texto = (
                 f'{solicitud["CENTRO"]}\n'
-                f'{cantidad_pedida} {unidad} de sangre '
+                f'{cantidad_visible} de sangre '
                 f'{solicitud["GRUPO_SANGUINEO"]}{solicitud["FACTOR_RH"]}\n'
                 f'Despacho: {fecha_visible} a las {solicitud["HORA_DESPACHO"]}\n'
                 f'Destino: {solicitud["DESTINO"]}'

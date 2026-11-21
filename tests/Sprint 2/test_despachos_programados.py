@@ -10,6 +10,7 @@ from servicios.despachos import (
     consultar_despachos,
     consultar_direccion_despacho,
     registrar_despacho,
+    migrar_despachos,
 )
 from servicios.vencimientos import consultar_stock_detallado
 
@@ -32,10 +33,22 @@ class DespachosProgramadosTest(unittest.TestCase):
                  ("Clínica de prueba", "Calle Clínica 20", None)],
             )
         inicializar_base(self.ruta)
+        # Crear el esquema de HU10 sobre la base temporal antes de los tests.
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            migrar_despachos(conexion)
+        # Bolsa AB- disponible durante la fecha simulada de los tests.
+        # Todas las solicitudes programadas usan mL, no número de bolsas.
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            conexion.execute("""
+                INSERT INTO DONACIONES (
+                    TIPO_SANGRE, FACTOR_RH, FECHA_EXTRACCIÓN,
+                    FECHA_VENCIMIENTO, CANTIDAD, ESTADO
+                ) VALUES ('AB', '-', '2026-11-15', '2026-11-30', 450, 'Disponible')
+            """)
         self.ahora = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
         self.datos = {
             "centro": "Hospital de prueba", "grupo": "AB", "rh": "-",
-            "cantidad": "3", "fecha": "20-11-2026", "horario": "12:01",
+            "cantidad": "300", "fecha": "20-11-2026", "horario": "12:01",
             "direccion_confirmada": "Calle Hospital 10, Concepción",
             "ruta": self.ruta, "ahora": self.ahora,
         }
@@ -46,14 +59,8 @@ class DespachosProgramadosTest(unittest.TestCase):
     def consultar(self, centro="Hospital de prueba"):
         return consultar_despachos(centro, ruta=self.ruta)
 
-    def test_registra_sin_stock_y_conserva_solicitudes_por_centro(self):
-        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
-            conexion.execute("""
-                INSERT INTO DONACIONES (
-                    TIPO_SANGRE, FACTOR_RH, FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO,
-                    CANTIDAD, ESTADO
-                ) VALUES ('AB', '-', '2026-11-15', '2026-11-30', 450, 'Disponible')
-            """)
+    def test_registra_con_stock_y_conserva_solicitudes_por_centro(self):
+        with closing(sqlite3.connect(self.ruta)) as conexion:
             unidades_antes = conexion.execute("SELECT * FROM DONACIONES").fetchall()
         stock_antes = consultar_stock_detallado(self.ruta, ahora=self.ahora)
         self.assertEqual(len(stock_antes["unidades"]), 1)
@@ -65,7 +72,8 @@ class DespachosProgramadosTest(unittest.TestCase):
 
         self.assertEqual(self.consultar(), [{
             "ID": primera, "CENTRO": "Hospital de prueba", "GRUPO_SANGUINEO": "AB",
-            "FACTOR_RH": "-", "CANTIDAD": 3, "FECHA_DESPACHO": "2026-11-20",
+            "FACTOR_RH": "-", "CANTIDAD": None, "VOLUMEN_ML": 300,
+            "FECHA_DESPACHO": "2026-11-20",
             "HORA_DESPACHO": "12:01", "DESTINO": "Calle Hospital 10, Concepción",
             "ESTADO": "Pendiente",
         }])
@@ -74,16 +82,21 @@ class DespachosProgramadosTest(unittest.TestCase):
         with closing(sqlite3.connect(self.ruta)) as conexion:
             self.assertEqual(conexion.execute("SELECT * FROM DONACIONES").fetchall(), unidades_antes)
 
+    def test_rechaza_volumen_superior_al_disponible(self):
+        with self.assertRaisesRegex(ValueError, "Stock insuficiente"):
+            self.guardar(cantidad="451")
+        self.assertEqual(self.consultar(), [])
+
     def test_rechaza_datos_invalidos_sin_guardar(self):
         casos = (
             ({"grupo": ""}, "grupo"),
             ({"grupo": "Z"}, "grupo"),
             ({"rh": "?"}, "Rh"),
-            ({"cantidad": ""}, "cantidad"),
-            ({"cantidad": 0}, "cantidad"),
-            ({"cantidad": -2}, "cantidad"),
-            ({"cantidad": "1.5"}, "cantidad"),
-            ({"cantidad": True}, "cantidad"),
+            ({"cantidad": ""}, "volumen entero en mL"),
+            ({"cantidad": 0}, "volumen entero en mL"),
+            ({"cantidad": -2}, "volumen entero en mL"),
+            ({"cantidad": "1.5"}, "volumen entero en mL"),
+            ({"cantidad": True}, "volumen entero en mL"),
             ({"cantidad": 2**63}, "máximo"),
             ({"fecha": ""}, "fecha"),
             ({"fecha": "31-02-2027"}, "fecha"),
