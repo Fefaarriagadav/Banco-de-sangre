@@ -4,7 +4,6 @@ from email.message import EmailMessage #crea correo con destinatario, asunto y c
 from dotenv import load_dotenv #carga las varuiables desde .env
 from pathlib import Path
 
-
 ruta_env = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ruta_env)
 
@@ -36,6 +35,10 @@ def enviar_correo(destinatario):
     "Atentamente,\n"
     "Equipo del Banco de Sangre")
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as servidor:
+    enviar_mensaje(mensaje)
+
+
+def enviar_mensaje(mensaje, **opciones_smtp):
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, **opciones_smtp) as servidor:
         servidor.login(correo, contrasena)
-        servidor.send_message(mensaje)
+        return servidor.send_message(mensaje)
