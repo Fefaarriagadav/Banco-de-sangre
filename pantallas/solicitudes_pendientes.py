@@ -1,6 +1,8 @@
 import customtkinter as ctk
 import sqlite3
+from pantallas.hoja_ruta import mostrar_hoja_ruta
 from servicios.despachos import (consultar_solicitudes_pendientes,consultar_detalle_solicitud,aprobar_solicitud,rechazar_solicitud)
+from servicios.rutas_logisticas import consultar_despachos_aprobados
 
 from tkinter import messagebox
 
@@ -26,6 +28,8 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
     lista.pack(fill="both", expand=True, padx=25, pady=10)
     mensaje = ctk.CTkLabel(vista, text="", text_color="#C62828")
     mensaje.pack(pady=5)
+    es_enfermero = str(rol).strip().casefold() == "enfermero"
+    vista_aprobadas = False
 
     def revisar_solicitud(tipo, solicitud_id):
         try:
@@ -117,13 +121,34 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
         for widget in lista.winfo_children():
             widget.destroy()
         try:
-            solicitudes = consultar_solicitudes_pendientes()
-        except sqlite3.Error as error:
+            solicitudes = (
+                consultar_despachos_aprobados(empleado_id) if vista_aprobadas
+                else consultar_solicitudes_pendientes()
+            )
+        except (sqlite3.Error, PermissionError) as error:
             mensaje.configure(text=f"Error al consultar las solicitudes: {error}")
             return
         mensaje.configure(text="")
         if not solicitudes:
-            ctk.CTkLabel(lista,text="No hay solicitudes pendientes.",font=("Arial", 17),text_color=GRIS).pack(pady=30)
+            estado = "aprobadas" if vista_aprobadas else "pendientes"
+            ctk.CTkLabel(lista,text=f"No hay solicitudes {estado}.",font=("Arial", 17),text_color=GRIS).pack(pady=30)
+            return
+
+        if vista_aprobadas:
+            for solicitud in solicitudes:
+                tipo = solicitud["TIPO"]
+                solicitud_id = solicitud["ID"]
+                tiene_hoja = solicitud["HOJA_ID"] is not None
+                tarjeta = ctk.CTkFrame(lista, fg_color="#FFFFFF", corner_radius=15, border_width=1, border_color="#DDE5EF")
+                tarjeta.pack(fill="x", padx=10, pady=8)
+                ctk.CTkLabel(tarjeta, text=f"{tipo} · Solicitud #{solicitud_id}", font=("Arial", 19, "bold"), text_color=AZUL).pack(anchor="w", padx=20, pady=(14, 4))
+                ctk.CTkLabel(tarjeta, text=f'{solicitud["CENTRO"]} · {solicitud["GRUPO_SANGUINEO"]}{solicitud["FACTOR_RH"]}', text_color=AZUL).pack(anchor="w", padx=20)
+                ctk.CTkButton(
+                    tarjeta, text="Consultar hoja de ruta" if tiene_hoja else "Generar hoja de ruta",
+                    command=lambda t=tipo, s=solicitud_id, h=tiene_hoja: mostrar_hoja_ruta(
+                        vista, t, s, empleado_id, tiene_hoja=h, actualizar=actualizar
+                    ),
+                ).pack(anchor="w", padx=20, pady=(8, 14))
             return
 
         for solicitud in solicitudes:
@@ -162,5 +187,14 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             else:
                 ctk.CTkButton(acciones,text="Derivar a otro banco",state="disabled",width=180).pack(side="left", padx=8)
 
-    ctk.CTkButton(barra,text="⟳ Actualizar solicitudes",command=actualizar,width=230).pack()
+    def cambiar_vista(opcion):
+        nonlocal vista_aprobadas
+        vista_aprobadas = opcion == "Aprobadas"
+        actualizar()
+
+    if es_enfermero:
+        selector = ctk.CTkSegmentedButton(barra, values=["Pendientes", "Aprobadas"], command=cambiar_vista)
+        selector.set("Pendientes")
+        selector.pack(side="left", padx=(0, 10))
+    ctk.CTkButton(barra,text="⟳ Actualizar solicitudes",command=actualizar,width=230).pack(side="left")
     actualizar()

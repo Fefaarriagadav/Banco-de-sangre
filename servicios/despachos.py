@@ -89,7 +89,7 @@ def _datos_centro(conexion, centro):
             return datos
     raise PermissionError("El centro médico no tiene acceso a solicitudes programadas.")
 
-def _direccion_de_entrega(conexion, centro):
+def direccion_de_entrega(conexion, centro):
     direccion, comuna = _datos_centro(conexion, centro)
     direccion = (direccion or "").strip()
     comuna = (comuna or "").strip()
@@ -99,7 +99,7 @@ def _direccion_de_entrega(conexion, centro):
 
 def consultar_direccion_despacho(centro, *, ruta=RUTA_BD):
     with closing(sqlite3.connect(ruta)) as conexion:
-        return _direccion_de_entrega(conexion, centro)
+        return direccion_de_entrega(conexion, centro)
 
 def _validar_cantidad(cantidad):
     mensaje = "Ingrese un volumen entero en mL mayor que cero."
@@ -117,11 +117,16 @@ def _validar_cantidad(cantidad):
         raise ValueError("La cantidad ingresada supera el máximo admitido.")
     return cantidad
 
-def _validar_programacion(fecha, horario, ahora):
-    fecha_despacho = validar_fecha(fecha.strip() if isinstance(fecha, str) else fecha)
+def validar_horario_despacho(horario):
     horario = horario.strip() if isinstance(horario, str) else ""
     if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", horario):
         raise ValueError("Ingrese un horario válido en formato HH:MM (24 horas).")
+    return horario
+
+
+def validar_programacion(fecha, horario, ahora=None):
+    fecha_despacho = validar_fecha(fecha.strip() if isinstance(fecha, str) else fecha)
+    horario = validar_horario_despacho(horario)
 
     zona = ZoneInfo(ZONA_HORARIA)
     hora_local = datetime.combine(fecha_despacho, time.fromisoformat(horario))
@@ -178,10 +183,10 @@ def registrar_despacho(centro, grupo, rh, cantidad, fecha, horario, *,
         conexion.execute("BEGIN IMMEDIATE")
         # Adaptar la tabla si todavía tiene el esquema antiguo
         migrar_despachos(conexion)
-        destino = _direccion_de_entrega(conexion, centro)
+        destino = direccion_de_entrega(conexion, centro)
         if direccion_confirmada != destino:
             raise ValueError("La dirección del centro cambió o no se confirmó. " "Vuelva a abrir el formulario para revisarla.")
-        fecha_despacho, hora_despacho = _validar_programacion(fecha,horario,ahora)
+        fecha_despacho, hora_despacho = validar_programacion(fecha, horario, ahora)
 
         # Consultar volumen real en el momento del registro
         disponible_ml = _volumen_disponible(conexion,grupo,rh,fecha_actual(ahora))
@@ -450,6 +455,7 @@ def consultar_solicitudes_pendientes(*, ruta=RUTA_BD):
 
 def preparar_aprobaciones(conexion):
     """Prepara el seguimiento de decisiones sin borrar solicitudes."""
+    crear_tabla_emergencias(conexion)
     for tabla in ("DESPACHOS_PROGRAMADOS", "DESPACHOS_EMERGENCIA"):
         columnas = {fila[1]
             for fila in conexion.execute(f"PRAGMA table_info({tabla})")}
@@ -463,10 +469,10 @@ def preparar_aprobaciones(conexion):
     conexion.execute("""CREATE TABLE IF NOT EXISTS RESERVAS_PROGRAMADAS (ID INTEGER PRIMARY KEY AUTOINCREMENT,SOLICITUD_ID INTEGER NOT NULL REFERENCES DESPACHOS_PROGRAMADOS(ID),
             DONACION_ID INTEGER NOT NULL UNIQUE REFERENCES DONACIONES(ID),VOLUMEN_ML INTEGER NOT NULL CHECK (VOLUMEN_ML > 0)) """)
 
-def validar_enfermero(conexion, empleado_id):
+def validar_enfermero(conexion, empleado_id, accion="aprobar o rechazar despachos"):
     fila = conexion.execute("""SELECT ROL FROM PERSONAL WHERE ID_EMPLEADO = ? """, (empleado_id,)).fetchone()
     if fila is None or str(fila[0]).strip().casefold() != "enfermero":
-        raise PermissionError("Solo un enfermero autorizado puede aprobar o rechazar despachos.")
+        raise PermissionError(f"Solo un enfermero autorizado puede {accion}.")
 
 def tabla_solicitud(tipo):
     if tipo == "Emergencia":
@@ -591,6 +597,28 @@ def rechazar_solicitud(tipo, solicitud_id, empleado_id, motivo, *, ruta=RUTA_BD)
             conexion.rollback()
             raise
 
+def consultar_bolsas_asignadas(conexion, tipo, solicitud_id):
+    tablas_reservas = {
+        "Emergencia": "RESERVAS_EMERGENCIA",
+        "Programado": "RESERVAS_PROGRAMADAS",
+    }
+    tabla = tablas_reservas.get(tipo)
+    if tabla is None:
+        raise ValueError("Tipo de solicitud inválido.")
+    if conexion.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (tabla,)
+    ).fetchone() is None:
+        return []
+    filas = conexion.execute(f"""
+        SELECT u.ID, r.VOLUMEN_ML, u.CANTIDAD AS VOLUMEN_REAL_ML,
+               u.FECHA_VENCIMIENTO, u.ESTADO
+        FROM {tabla} AS r JOIN DONACIONES AS u ON u.ID = r.DONACION_ID
+        WHERE r.SOLICITUD_ID = ?
+        ORDER BY u.FECHA_VENCIMIENTO ASC, u.ID ASC
+    """, (solicitud_id,))
+    return [dict(fila) for fila in filas]
+
+
 def consultar_detalle_solicitud(tipo, solicitud_id, *, ruta=RUTA_BD):
     tabla = tabla_solicitud(tipo)
     hoy = fecha_actual().isoformat()
@@ -607,18 +635,7 @@ def consultar_detalle_solicitud(tipo, solicitud_id, *, ruta=RUTA_BD):
             ON d.ID = u.DONANTE WHERE u.ESTADO = 'Disponible' AND u.FECHA_VENCIMIENTO >= ? AND COALESCE(u.TIPO_SANGRE, d.GRUPO_SANGUINEO) = ? AND COALESCE(u.FACTOR_RH, d.FACTOR_RH) = ?
             AND u.CANTIDAD > 0 ORDER BY u.FECHA_VENCIMIENTO ASC, u.ID ASC """, (hoy, grupo, rh)).fetchall()
         bolsas_disponibles = [dict(fila) for fila in disponibles]
-        tablas = {fila[0]
-            for fila in conexion.execute("""SELECT name FROM sqlite_master WHERE type = 'table' """)}
-        #donaciones asociadas a la reserva
-        reservas_tabla = ("RESERVAS_EMERGENCIA" 
-            if tipo == "Emergencia"
-            else "RESERVAS_PROGRAMADAS")
-        bolsas_asignadas = []
-        if reservas_tabla in tablas:
-            filas = conexion.execute(f"""SELECT u.ID, r.VOLUMEN_ML, u.CANTIDAD AS VOLUMEN_REAL_ML, u.FECHA_VENCIMIENTO, u.ESTADO
-                FROM {reservas_tabla} AS r JOIN DONACIONES AS u ON u.ID = r.DONACION_ID WHERE r.SOLICITUD_ID = ? ORDER BY u.FECHA_VENCIMIENTO ASC, u.ID ASC
-            """, (solicitud_id,)).fetchall()
-            bolsas_asignadas = [dict(fila) for fila in filas]
+        bolsas_asignadas = consultar_bolsas_asignadas(conexion, tipo, solicitud_id)
         total_disponible = sum(
             bolsa["VOLUMEN_ML"]
             for bolsa in bolsas_disponibles)

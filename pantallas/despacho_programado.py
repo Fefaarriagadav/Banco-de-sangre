@@ -1,9 +1,17 @@
 import sqlite3
-from calendar import monthrange
 from datetime import date
 
 import customtkinter as ctk
 
+from pantallas.selector_programacion import (
+    BORDE,
+    BOTON_CAMPO,
+    CAMPO,
+    ESTILO_SELECTOR,
+    TEXTO_SECUNDARIO,
+    TINTA,
+    SelectorProgramacion,
+)
 from servicios.despachos import (
     FACTORES_RH,
     GRUPOS,
@@ -13,22 +21,10 @@ from servicios.despachos import (
     consultar_volumen_disponible,
     registrar_despacho,
 )
-from servicios.vencimientos import fecha_actual
-
-
-MESES = (
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-)
 
 
 FONDO = ("#F1F5F9", "#151D29")
 SUPERFICIE = ("#FFFFFF", "#212C3B")
-BORDE = ("#DDE5EF", "#354255")
-TINTA = ("#193653", "#F1F5F9")
-TEXTO_SECUNDARIO = ("#53677E", "#B4C2D3")
-CAMPO = ("#EDF3F9", "#2D3C50")
-BOTON_CAMPO = ("#DCE8F4", "#3B506A")
 DESTACADO = ("#FBF1F3", "#382633")
 BORDE_DESTINO = ("#F0D8DF", "#624351")
 ACENTO = ("#912B46", "#A73956")
@@ -100,24 +96,18 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         cuerpo.pack(fill="x", padx=18, pady=(0, 13))
         return cuerpo
 
-    def etiqueta(padre, texto, *, secundaria=False):
+    def etiqueta(padre, texto):
         return ctk.CTkLabel(
             padre, text=texto, anchor="w",
-            font=("Arial", 12 if secundaria else 14, "bold"),
-            text_color=TEXTO_SECUNDARIO if secundaria else TINTA,
-            height=20 if secundaria else 22,
+            font=("Arial", 14, "bold"), text_color=TINTA, height=22,
         )
 
-    estilo_menu = {
-        "fg_color": CAMPO, "button_color": BOTON_CAMPO, "button_hover_color": BORDE,
-        "text_color": TINTA, "font": ("Arial", 13), "height": 34, "corner_radius": 8,
-    }
     bolsas = seccion("Volumen solicitado")
     for columna in range(3):
         bolsas.columnconfigure(columna, weight=1, uniform="bolsas")
-    grupo = ctk.CTkOptionMenu(bolsas, values=list(GRUPOS), width=140, **estilo_menu)
+    grupo = ctk.CTkOptionMenu(bolsas, values=list(GRUPOS), width=140, **ESTILO_SELECTOR)
     grupo.set("Seleccione")
-    rh = ctk.CTkOptionMenu(bolsas, values=list(FACTORES_RH), width=140, **estilo_menu)
+    rh = ctk.CTkOptionMenu(bolsas, values=list(FACTORES_RH), width=140, **ESTILO_SELECTOR)
     rh.set("Seleccione")
     cantidad = ctk.CTkEntry(
         bolsas, placeholder_text="Ej. 450", width=140, height=34, corner_radius=8,
@@ -132,14 +122,6 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         margen = (0, 14) if columna < 2 else (0, 0)
         etiqueta(bolsas, nombre).grid(row=0, column=columna, sticky="ew", padx=margen)
         control.grid(row=1, column=columna, sticky="ew", padx=margen, pady=(4, 0))
-
-    def agregar_selector(padre, columna, nombre, valores, inicial, ancho, *, tipo=ctk.CTkOptionMenu):
-        etiqueta(padre, nombre, secundaria=True).grid(row=0, column=columna, sticky="w")
-        opciones = {"border_color": BORDE, "border_width": 1} if tipo is ctk.CTkComboBox else {}
-        control = tipo(padre, values=valores, width=ancho, **estilo_menu, **opciones)
-        control.set(inicial)
-        control.grid(row=1, column=columna, sticky="w", padx=(0, 8), pady=(3, 0))
-        return control
 
     disponibilidad = ctk.CTkLabel(formulario,text="Selecciona grupo y Rh para consultar los mL disponibles.",text_color=TEXTO_SECUNDARIO,font=("Arial", 13))
     disponibilidad.pack(anchor="w", padx=12, pady=(0, 8))
@@ -157,38 +139,8 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
     grupo.configure(command=actualizar_disponibilidad)
     rh.configure(command=actualizar_disponibilidad)
 
-    programacion = seccion("Programación")
-    programacion.columnconfigure(0, weight=1)
-    programacion.columnconfigure(1, weight=1)
-    etiqueta(programacion, "Fecha de despacho").grid(row=0, column=0, sticky="w")
-    etiqueta(programacion, "Hora de Santiago").grid(row=0, column=1, sticky="w")
-    hoy = fecha_actual()
-    fecha = ctk.CTkFrame(programacion, fg_color="transparent")
-    fecha.grid(row=1, column=0, sticky="w", pady=(3, 0), padx=(0, 16))
-    dia = agregar_selector(fecha, 0, "Día", ["01"], f"{hoy.day:02}", 68)
-    mes = agregar_selector(fecha, 1, "Mes", list(MESES), MESES[hoy.month - 1], 130)
-    anios = [str(anio) for anio in range(hoy.year, min(hoy.year + 5, 10000))]
-    anio = agregar_selector(fecha, 2, "Año", anios, str(hoy.year), 90, tipo=ctk.CTkComboBox)
-
-    def actualizar_dias(_=None):
-        try:
-            ultimo_dia = monthrange(int(anio.get()), MESES.index(mes.get()) + 1)[1]
-        except ValueError:
-            return
-        dias = [f"{numero:02}" for numero in range(1, ultimo_dia + 1)]
-        dia.configure(values=dias)
-        if dia.get() not in dias:
-            dia.set("—")
-
-    mes.configure(command=actualizar_dias)
-    anio.configure(command=actualizar_dias)
-    anio.bind("<FocusOut>", actualizar_dias)
-    actualizar_dias()
-
-    horario = ctk.CTkFrame(programacion, fg_color="transparent")
-    horario.grid(row=1, column=1, sticky="w", pady=(3, 0))
-    hora = agregar_selector(horario, 0, "Hora", [f"{h:02}" for h in range(24)], "—", 76)
-    minuto = agregar_selector(horario, 1, "Minuto", [f"{m:02}" for m in range(60)], "00", 76)
+    programacion = SelectorProgramacion(seccion("Programación"), etiqueta_fecha="Fecha de despacho", anio_editable=True)
+    programacion.pack(fill="x")
 
     direccion = ""
     error_destino = ""
@@ -230,8 +182,7 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         try:
             if not confirmar_direccion.get():
                 raise ValueError("Confirme la dirección de entrega.")
-            fecha_elegida = f"{dia.get()}-{MESES.index(mes.get()) + 1:02}-{anio.get().strip()}"
-            hora_elegida = f"{hora.get()}:{minuto.get()}"
+            fecha_elegida, hora_elegida = programacion.obtener()
             solicitud_id = registrar_despacho(
                 centro, grupo.get(), rh.get(), cantidad.get(), fecha_elegida,
                 hora_elegida, direccion_confirmada=direccion,
@@ -248,8 +199,7 @@ def mostrar_despacho_programado(pantalla, centro, volver_stock):
         grupo.set("Seleccione")
         rh.set("Seleccione")
         cantidad.delete(0, "end")
-        hora.set("—")
-        minuto.set("00")
+        programacion.limpiar_horario()
         confirmar_direccion.deselect()
         actualizar_disponibilidad()
         mostrar_mensaje(
