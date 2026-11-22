@@ -16,6 +16,7 @@ Aplicación de escritorio desarrollada en *Python, CustomTkinter y SQLite* para 
    - [H6: Vencimientos, alertas y stock](#h6-vencimientos-alertas-y-stock)
    - [Alertas de sobreabastecimiento y redistribución](#alertas-de-sobreabastecimiento-y-redistribución)
    - [HU10: Despacho programado](#hu10-despacho-programado)
+   - [HU12: Hoja de ruta logística](#hu12-hoja-de-ruta-logística)
 5. [Configuración del correo electrónico](#configuración-del-correo-electrónico)
 6. [Integración con H7](#integración-con-h7)
 7. [Seguridad y consideraciones](#seguridad-y-consideraciones)
@@ -259,6 +260,33 @@ la persona que usa la aplicación. La inicialización conserva el catálogo exis
 y crea las tablas faltantes. La base ficticia generada con
 `python scripts/crear_base_demo.py` incluye el **Hospital de demostración** para probar
 el flujo usando `BANCO_SANGRE_BD` con la ruta de esa base.
+
+### HU12: Hoja de ruta logística
+
+1. Ingresa como **Enfermero**. Abre **Solicitudes de despacho** y selecciona **Aprobadas**.
+2. En una solicitud con bolsas asignadas, pulsa **Generar hoja de ruta**. Para un despacho programado se usan el destino, la fecha y el horario registrados. En una emergencia, la dirección se carga desde el catálogo del centro solicitante. Selecciona el día, mes, año, hora y minuto del traslado en hora de Santiago. El centro debe tener una dirección registrada para que se pueda generar la hoja.
+3. La hoja se guarda con el número y tipo de solicitud, origen, destino, fecha, horario, bolsas asignadas y la ficha de transporte configurada. **Consultar hoja de ruta** vuelve a abrir la misma hoja y su historial.
+4. Pulsa **Notificar a logística** para enviar la hoja al departamento interno que coordina el traslado. La hoja conserva los datos del hospital de destino. El historial indica fecha, empleado, destinatario y resultado. Ante un fallo, puedes usar **Reintentar notificación**. Si la aplicación se cierra durante un intento, espera cinco minutos y verifica con logística si recibió el correo antes de reintentarlo.
+
+El estado **Enviado** indica aceptación por el servidor SMTP. La confirmación de recepción y la entrega física son eventos distintos. Generar, consultar o enviar una hoja conserva el estado de la solicitud y de las bolsas.
+
+Agrega estas variables al `.env` de la aplicación y reinicia el programa. El inventario vigente maneja un producto sin distinguir hemocomponentes. El equipo debe cargar el nombre de ese producto y su ficha validada de transporte. La aplicación requiere los cuatro primeros valores para generar una hoja.
+
+```dotenv
+HU12_ORIGEN=
+HU12_PRODUCTO=
+HU12_REQUISITOS_TERMICOS=
+HU12_INSTRUCCIONES_TRANSPORTE=
+HU12_CORREO_LOGISTICA=
+```
+
+`HU12_CORREO_LOGISTICA` contiene la dirección de la casilla interna que recibe todas las hojas. Si falta la dirección o su formato es inválido, el intento queda como **Fallido** antes de conectar con SMTP.
+
+La aplicación inicia sesión en SMTP con `CORREO_REMITENTE` y su `CONTRASENA_APP`. El personal de Logística usa su propio acceso para abrir el buzón receptor. Las pruebas de HU12 utilizan un servidor SMTP simulado.
+
+```bash
+python -m unittest discover -s "tests/Sprint 2" -p "test_rutas_logisticas.py" -v
+```
 
 ## Configuración del correo electrónico
 
