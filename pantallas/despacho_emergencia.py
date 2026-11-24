@@ -51,7 +51,7 @@ def mostrar_despacho_emergencia(pantalla, centro, volver_stock):
     #registrar solicitud
     def guardar_emergencia(confirmacion_ml=None):
         try:
-            solicitud_id = registrar_emergencia(centro,grupo.get(),rh.get(),volumen.get(),motivo.get("1.0", "end-1c"),confirmar_volumen=confirmacion_ml)
+            solicitud_id = registrar_emergencia(centro,grupo.get(),rh.get(),volumen.get(),motivo.get("1.0", "end-1c"),confirmar_volumen=confirmacion_ml,permitir_deficit=True,)
 
         except ExcesoVolumenError as error:
             volumen_propuesto = error.asignado

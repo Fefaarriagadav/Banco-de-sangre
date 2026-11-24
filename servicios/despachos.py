@@ -323,7 +323,7 @@ def seleccionar_bolsas_emergencia(conexion, grupo, rh, volumen_solicitado, hoy):
         for indice in indices_seleccionados]
     return seleccionadas, volumen_asignado
 
-def registrar_emergencia(centro, grupo, rh, volumen_ml, motivo,*, ruta=RUTA_BD, confirmar_volumen=None):
+def registrar_emergencia(centro, grupo, rh, volumen_ml, motivo, *, ruta=RUTA_BD, confirmar_volumen=None, permitir_deficit=False):
     if grupo not in GRUPOS:
         raise ValueError("Seleccione un grupo sanguíneo válido.")
     if rh not in FACTORES_RH:
@@ -348,12 +348,19 @@ def registrar_emergencia(centro, grupo, rh, volumen_ml, motivo,*, ruta=RUTA_BD, 
             hoy = fecha_actual()
 
             #seleccionar donaciones existentes
-            bolsas, volumen_asignado = seleccionar_bolsas_emergencia(conexion,grupo,rh,volumen_ml,hoy)
+            try:
+                bolsas, volumen_asignado = seleccionar_bolsas_emergencia(conexion,grupo,rh,volumen_ml,hoy)
 
-            #si se necesita mas, pedir
-            if volumen_asignado > volumen_ml:
-                if confirmar_volumen != volumen_asignado:
-                    raise ExcesoVolumenError(volumen_ml,volumen_asignado)
+                #si se necesita mas, pedir
+                if volumen_asignado > volumen_ml:
+                    if confirmar_volumen != volumen_asignado:
+                        raise ExcesoVolumenError(volumen_ml,volumen_asignado)
+            except ValueError as err:
+                if permitir_deficit and "Stock insuficiente" in str(err):
+                    bolsas = []
+                    volumen_asignado = 0
+                else:
+                    raise
 
             #registarr solicitud pendiente
             cursor = conexion.execute("""
