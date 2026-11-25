@@ -390,7 +390,7 @@ def consultar_mis_solicitudes(centro, *, ruta=RUTA_BD):
     solicitudes = []
     with closing(sqlite3.connect(ruta)) as conexion:
         conexion.row_factory = sqlite3.Row
-        #verifica que el hospital este en lalista
+        # verifica que el hospital este en la lista
         _datos_centro(conexion, centro)
         # solicitudes programadas
         tablas = {
@@ -411,14 +411,34 @@ def consultar_mis_solicitudes(centro, *, ruta=RUTA_BD):
                 solicitud["TIPO"] = "Programado"
                 solicitudes.append(solicitud)
 
-        #solicitudes de emergncia
+        # solicitudes de emergencia (incluyendo destino si fue redirigida)
         if "DESPACHOS_EMERGENCIA" in tablas:
-            filas = conexion.execute("""SELECT ID,CENTRO,GRUPO_SANGUINEO,FACTOR_RH,VOLUMEN_ML,MOTIVO,FECHA_SOLICITUD,ESTADO FROM DESPACHOS_EMERGENCIA WHERE CENTRO = ? ORDER BY ID DESC """, (centro,)).fetchall()
+            tiene_redirecciones = "REDIRECCIONES_EMERGENCIA" in tablas
+            if tiene_redirecciones:
+                filas = conexion.execute("""
+                    SELECT e.ID, e.CENTRO, e.GRUPO_SANGUINEO, e.FACTOR_RH, e.VOLUMEN_ML,
+                           e.MOTIVO, e.FECHA_SOLICITUD, e.ESTADO,
+                           r.CENTRO_EXTERNO_DESTINO, r.ESTADO_REDIRECCION
+                    FROM DESPACHOS_EMERGENCIA AS e
+                    LEFT JOIN REDIRECCIONES_EMERGENCIA AS r ON r.ORDEN_ID = e.ID
+                    WHERE e.CENTRO = ?
+                    ORDER BY e.ID DESC
+                """, (centro,)).fetchall()
+            else:
+                filas = conexion.execute("""
+                    SELECT ID, CENTRO, GRUPO_SANGUINEO, FACTOR_RH, VOLUMEN_ML,
+                           MOTIVO, FECHA_SOLICITUD, ESTADO,
+                           NULL AS CENTRO_EXTERNO_DESTINO, NULL AS ESTADO_REDIRECCION
+                    FROM DESPACHOS_EMERGENCIA
+                    WHERE CENTRO = ?
+                    ORDER BY ID DESC
+                """, (centro,)).fetchall()
             for fila in filas:
                 solicitud = dict(fila)
                 solicitud["TIPO"] = "Emergencia"
                 solicitudes.append(solicitud)
     return solicitudes
+
 
 def consultar_solicitudes_pendientes(*, ruta=RUTA_BD):
     """Obtiene todas las solicitudes, priorizando emergencias."""
@@ -433,17 +453,32 @@ def consultar_solicitudes_pendientes(*, ruta=RUTA_BD):
             fila[0]
             for fila in conexion.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
 
-        #emergencias tienen prioridad alta ( vienen primero)
+        # emergencias tienen prioridad alta (vienen primero)
         if "DESPACHOS_EMERGENCIA" in tablas:
-            filas = conexion.execute("""SELECT ID, CENTRO, GRUPO_SANGUINEO,FACTOR_RH, VOLUMEN_ML, MOTIVO,FECHA_SOLICITUD, ESTADO FROM DESPACHOS_EMERGENCIA
-                WHERE ESTADO IN ('Pendiente', 'Pendiente de aprobación') ORDER BY FECHA_SOLICITUD ASC, ID ASC """).fetchall()
+            if "RESERVAS_EMERGENCIA" in tablas:
+                filas = conexion.execute("""
+                    SELECT e.ID, e.CENTRO, e.GRUPO_SANGUINEO, e.FACTOR_RH, e.VOLUMEN_ML,
+                           e.MOTIVO, e.FECHA_SOLICITUD, e.ESTADO,
+                           COALESCE((SELECT SUM(r.VOLUMEN_ML) FROM RESERVAS_EMERGENCIA AS r WHERE r.SOLICITUD_ID = e.ID), 0) AS VOLUMEN_RESERVADO_ML
+                    FROM DESPACHOS_EMERGENCIA AS e
+                    WHERE e.ESTADO IN ('Pendiente', 'Pendiente de aprobación')
+                    ORDER BY e.FECHA_SOLICITUD ASC, e.ID ASC
+                """).fetchall()
+            else:
+                filas = conexion.execute("""
+                    SELECT ID, CENTRO, GRUPO_SANGUINEO, FACTOR_RH, VOLUMEN_ML, MOTIVO,
+                           FECHA_SOLICITUD, ESTADO, 0 AS VOLUMEN_RESERVADO_ML
+                    FROM DESPACHOS_EMERGENCIA
+                    WHERE ESTADO IN ('Pendiente', 'Pendiente de aprobación')
+                    ORDER BY FECHA_SOLICITUD ASC, ID ASC
+                """).fetchall()
 
             for fila in filas:
                 solicitud = dict(fila)
                 solicitud["TIPO"] = "Emergencia"
                 resultado.append(solicitud)
 
-        #programados no tiene prioridad (normal)
+        # programados no tiene prioridad (normal)
         if "DESPACHOS_PROGRAMADOS" in tablas:
             columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(DESPACHOS_PROGRAMADOS)")}
 

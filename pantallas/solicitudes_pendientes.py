@@ -17,11 +17,9 @@ from servicios.redireccion_emergencias import (
 
 
 def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones):
-    # usamos frame contenido del personal
     for widget in pantalla.winfo_children():
         widget.destroy()
 
-    # colores
     FONDO = "#F3F5F9"
     AZUL = "#193653"
     GRIS = "#64748B"
@@ -104,7 +102,6 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             anchor="w",
         ).pack(fill="x", padx=15, pady=10)
 
-        # bolsas reservadas
         ctk.CTkLabel(
             contenido,
             text="BOLSAS ASIGNADAS A ESTA SOLICITUD",
@@ -134,7 +131,6 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
                 text_color="#B45309",
             ).pack(pady=8)
 
-        # inventario actual
         ctk.CTkLabel(
             contenido,
             text="BOLSAS DISPONIBLES EN EL INVENTARIO",
@@ -163,7 +159,6 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
                 text_color="#C62828",
             ).pack(pady=8)
 
-        # decisiones
         botones = ctk.CTkFrame(contenido, fg_color="transparent")
         botones.pack(pady=25)
 
@@ -175,16 +170,45 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             ventana.destroy()
             confirmar_rechazo(tipo, solicitud_id)
 
+        def derivar():
+            ventana.destroy()
+            confirmar_redireccion(solicitud_id)
+
         if es_enfermero:
-            ctk.CTkButton(
-                botones,
-                text="Confirmar aprobación",
-                command=aprobar,
-                fg_color="#15803D",
-                hover_color="#166534",
-                width=200,
-                height=42,
-            ).pack(side="left", padx=8)
+            sin_stock_emergencia = (
+                tipo == "Emergencia"
+                and volumen is not None
+                and detalle["total_asignado_ml"] < volumen
+            )
+            if sin_stock_emergencia:
+                ctk.CTkButton(
+                    botones,
+                    text="Sin stock para aprobar",
+                    state="disabled",
+                    fg_color="#94A3B8",
+                    width=200,
+                    height=42,
+                ).pack(side="left", padx=8)
+                ctk.CTkButton(
+                    botones,
+                    text="🏥 Derivar a centro externo",
+                    command=derivar,
+                    fg_color="#D97706",
+                    hover_color="#B45309",
+                    width=210,
+                    height=42,
+                ).pack(side="left", padx=8)
+            else:
+                ctk.CTkButton(
+                    botones,
+                    text="Confirmar aprobación",
+                    command=aprobar,
+                    fg_color="#15803D",
+                    hover_color="#166534",
+                    width=200,
+                    height=42,
+                ).pack(side="left", padx=8)
+
             ctk.CTkButton(
                 botones,
                 text="Rechazar",
@@ -245,31 +269,111 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             messagebox.showinfo("Stock suficiente", evaluacion["mensaje"])
             return
 
-        if evaluacion.get("hay_centro_disponible"):
-            centro_ext = evaluacion["centro_seleccionado"]["CENTRO"]
-            pregunta = (
-                f"{evaluacion['mensaje']}\n\n"
-                f"¿Desea redirigir automáticamente la emergencia #{solicitud_id} a {centro_ext}?"
-            )
-        else:
+        # Si no hay centros externos disponibles, confirmar registro de falta de cobertura
+        if not evaluacion.get("hay_centro_disponible"):
             pregunta = (
                 f"{evaluacion['mensaje']}\n\n"
                 "¿Desea registrar la falta de cobertura externa en la trazabilidad de la orden?"
             )
-
-        if not messagebox.askyesno("Redirección de emergencia (H13)", pregunta):
+            if not messagebox.askyesno("Sin centros externos disponibles", pregunta):
+                return
+            try:
+                resultado = ejecutar_redireccion_emergencia(solicitud_id, empleado_id)
+                messagebox.showwarning("Sin centros externos disponibles", resultado["mensaje"])
+                actualizar()
+            except (sqlite3.Error, ValueError, PermissionError) as error:
+                messagebox.showerror("No se pudo registrar", str(error))
+                actualizar()
             return
 
-        try:
-            resultado = ejecutar_redireccion_emergencia(solicitud_id, empleado_id)
-            if resultado["redirigida"]:
+        # Hay candidatos: abrir ventana modal para elegir el hospital destino
+        candidatos = evaluacion.get("centros_candidatos") or [evaluacion["centro_seleccionado"]]
+        opciones_mapa = {}
+        opciones_texto = []
+        for c in candidatos:
+            etiqueta = f"{c['CENTRO']} ({c['VOLUMEN_DISPONIBLE_ML']} mL disp. · {c.get('COMUNA', '')})"
+            opciones_mapa[etiqueta] = c["CENTRO"]
+            opciones_texto.append(etiqueta)
+
+        modal = ctk.CTkToplevel(vista)
+        modal.title(f"Redirigir Emergencia #{solicitud_id}")
+        modal.geometry("540x360")
+        modal.transient(vista.winfo_toplevel())
+        modal.grab_set()
+
+        ctk.CTkLabel(
+            modal,
+            text=f"DERIVAR EMERGENCIA #{solicitud_id}",
+            font=("Arial", 20, "bold"),
+            text_color=AZUL,
+        ).pack(pady=(22, 8))
+
+        info_deficit = (
+            f"Solicitante: {evaluacion['centro_solicitante']}\n"
+            f"Requerido: {evaluacion['volumen_requerido_ml']} mL de "
+            f"{evaluacion['grupo_sanguineo']}{evaluacion['factor_rh']}\n"
+            f"Stock propio disponible: {evaluacion['stock_propio_ml']} mL (Déficit)"
+        )
+        ctk.CTkLabel(
+            modal,
+            text=info_deficit,
+            font=("Arial", 14),
+            text_color="#B45309",
+            justify="center",
+        ).pack(pady=(0, 14))
+
+        ctk.CTkLabel(
+            modal,
+            text="Seleccione el hospital o centro externo destino:",
+            font=("Arial", 14, "bold"),
+            text_color=AZUL,
+        ).pack(pady=(4, 6))
+
+        selector_centro = ctk.CTkOptionMenu(
+            modal,
+            values=opciones_texto,
+            width=450,
+            height=40,
+        )
+        selector_centro.set(opciones_texto[0])
+        selector_centro.pack(pady=(0, 20))
+
+        def confirmar_envio():
+            hospital_elegido = opciones_mapa[selector_centro.get()]
+            modal.destroy()
+            try:
+                resultado = ejecutar_redireccion_emergencia(
+                    solicitud_id,
+                    empleado_id,
+                    centro_elegido=hospital_elegido,
+                )
                 messagebox.showinfo("Redirección registrada", resultado["mensaje"])
-            else:
-                messagebox.showwarning("Sin centros externos disponibles", resultado["mensaje"])
-            actualizar()
-        except (sqlite3.Error, ValueError, PermissionError) as error:
-            messagebox.showerror("No se pudo redirigir", str(error))
-            actualizar()
+                actualizar()
+            except (sqlite3.Error, ValueError, PermissionError) as error:
+                messagebox.showerror("No se pudo redirigir", str(error))
+                actualizar()
+
+        fila_botones = ctk.CTkFrame(modal, fg_color="transparent")
+        fila_botones.pack(pady=5)
+
+        ctk.CTkButton(
+            fila_botones,
+            text="Confirmar derivación",
+            command=confirmar_envio,
+            fg_color="#D97706",
+            hover_color="#B45309",
+            width=190,
+            height=40,
+        ).pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            fila_botones,
+            text="Cancelar",
+            command=modal.destroy,
+            fg_color="#64748B",
+            width=130,
+            height=40,
+        ).pack(side="left", padx=8)
 
     def actualizar():
         for widget in lista.winfo_children():
@@ -388,6 +492,10 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
         for solicitud in solicitudes:
             tipo = solicitud["TIPO"]
             emergencia = tipo == "Emergencia"
+            volumen = solicitud["VOLUMEN_ML"]
+            reservado_ml = solicitud.get("VOLUMEN_RESERVADO_ML", 0)
+            en_deficit = emergencia and volumen is not None and reservado_ml < volumen
+
             tarjeta = ctk.CTkFrame(
                 lista,
                 fg_color="#FFFFFF",
@@ -410,17 +518,22 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             ).pack(anchor="w", padx=20, pady=(14, 5))
 
             grupo = f'{solicitud["GRUPO_SANGUINEO"]}{solicitud["FACTOR_RH"]}'
-            volumen = solicitud["VOLUMEN_ML"]
             if volumen is not None:
                 cantidad = f"{volumen} mL"
             else:
                 cantidad = f'{solicitud["CANTIDAD"]} bolsas (registro anterior)'
 
+            estado_texto = (
+                f'{solicitud["ESTADO"]} (⚠️ Stock propio insuficiente: {reservado_ml} mL reservados)'
+                if en_deficit
+                else solicitud["ESTADO"]
+            )
+
             datos = (
                 f'Hospital: {solicitud["CENTRO"]}\n'
                 f'Grupo sanguíneo: {grupo}\n'
                 f'Cantidad: {cantidad}\n'
-                f'Estado: {solicitud["ESTADO"]}'
+                f'Estado: {estado_texto}'
             )
             if emergencia:
                 datos += f'\nMotivo: {solicitud["MOTIVO"]}'
@@ -440,14 +553,24 @@ def mostrar_solicitudes_pendientes(pantalla, rol, empleado_id, abrir_donaciones)
             acciones.pack(anchor="w", padx=20, pady=(0, 15))
 
             if es_enfermero:
-                ctk.CTkButton(
-                    acciones,
-                    text="Aprobar",
-                    command=lambda t=tipo, s=solicitud["ID"]: revisar_solicitud(t, s),
-                    fg_color="#15803D",
-                    hover_color="#166534",
-                    width=110,
-                ).pack(side="left", padx=(0, 8))
+                if en_deficit:
+                    ctk.CTkButton(
+                        acciones,
+                        text="Sin stock para aprobar",
+                        state="disabled",
+                        fg_color="#94A3B8",
+                        width=165,
+                    ).pack(side="left", padx=(0, 8))
+                else:
+                    ctk.CTkButton(
+                        acciones,
+                        text="Aprobar",
+                        command=lambda t=tipo, s=solicitud["ID"]: revisar_solicitud(t, s),
+                        fg_color="#15803D",
+                        hover_color="#166534",
+                        width=110,
+                    ).pack(side="left", padx=(0, 8))
+
                 ctk.CTkButton(
                     acciones,
                     text="Rechazar",

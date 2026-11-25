@@ -180,8 +180,8 @@ def evaluar_deficit_y_seleccionar_centro(
                     f"pero ningún centro externo cuenta con stock suficiente de {grupo}{rh}."
                 ),
             }
-
-        elegido = dict(candidatos[0])
+        lista_candidatos = [dict(c) for c in candidatos]
+        elegido = lista_candidatos[0]
         return {
             "requiere_redireccion": True,
             "hay_centro_disponible": True,
@@ -192,10 +192,10 @@ def evaluar_deficit_y_seleccionar_centro(
             "volumen_requerido_ml": requerido_ml,
             "stock_propio_ml": cobertura_propia_ml,
             "centro_seleccionado": elegido,
+            "centros_candidatos": lista_candidatos,
             "mensaje": (
                 f"Stock propio insuficiente ({cobertura_propia_ml} mL disponibles). "
-                f"Centro externo seleccionado: {elegido['CENTRO']} "
-                f"({elegido['VOLUMEN_DISPONIBLE_ML']} mL disponibles)."
+                f"Se encontraron {len(lista_candidatos)} centros externos disponibles."
             ),
         }
 
@@ -204,6 +204,7 @@ def ejecutar_redireccion_emergencia(
     orden_id,
     empleado_id,
     *,
+    centro_elegido=None,
     ruta=RUTA_BD,
     ahora=None,
 ):
@@ -292,17 +293,31 @@ def ejecutar_redireccion_emergencia(
                     """, (hoy.isoformat(), don_id))
                 conexion.execute("DELETE FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?", (orden_id,))
 
-            candidato = conexion.execute("""
-                SELECT s.CENTRO, c.DIRECCION, c.COMUNA, s.VOLUMEN_DISPONIBLE_ML
-                FROM CENTROS_EXTERNOS_STOCK AS s
-                JOIN CENTROS_MEDICOS AS c ON c.NOMBRE = s.CENTRO
-                WHERE s.GRUPO_SANGUINEO = ?
-                  AND s.FACTOR_RH = ?
-                  AND s.VOLUMEN_DISPONIBLE_ML >= ?
-                  AND s.CENTRO != ?
-                ORDER BY s.PRIORIDAD_CERCANIA ASC, s.VOLUMEN_DISPONIBLE_ML DESC, s.CENTRO ASC
-                LIMIT 1
-            """, (grupo, rh, requerido_ml, solicitante)).fetchone()
+            if centro_elegido:
+                candidato = conexion.execute("""
+                    SELECT s.CENTRO, c.DIRECCION, c.COMUNA, s.VOLUMEN_DISPONIBLE_ML
+                    FROM CENTROS_EXTERNOS_STOCK AS s
+                    JOIN CENTROS_MEDICOS AS c ON c.NOMBRE = s.CENTRO
+                    WHERE s.CENTRO = ?
+                      AND s.GRUPO_SANGUINEO = ?
+                      AND s.FACTOR_RH = ?
+                      AND s.VOLUMEN_DISPONIBLE_ML >= ?
+                      AND s.CENTRO != ?
+                """, (centro_elegido, grupo, rh, requerido_ml, solicitante)).fetchone()
+                if candidato is None:
+                    raise ValueError(f"El centro '{centro_elegido}' no cuenta con stock suficiente para cubrir la orden.")
+            else:
+                candidato = conexion.execute("""
+                    SELECT s.CENTRO, c.DIRECCION, c.COMUNA, s.VOLUMEN_DISPONIBLE_ML
+                    FROM CENTROS_EXTERNOS_STOCK AS s
+                    JOIN CENTROS_MEDICOS AS c ON c.NOMBRE = s.CENTRO
+                    WHERE s.GRUPO_SANGUINEO = ?
+                      AND s.FACTOR_RH = ?
+                      AND s.VOLUMEN_DISPONIBLE_ML >= ?
+                      AND s.CENTRO != ?
+                    ORDER BY s.PRIORIDAD_CERCANIA ASC, s.VOLUMEN_DISPONIBLE_ML DESC, s.CENTRO ASC
+                    LIMIT 1
+                """, (grupo, rh, requerido_ml, solicitante)).fetchone()
 
             motivo_deficit = (
                 f"Déficit de stock propio ({disponible_propio_ml} mL disponibles "

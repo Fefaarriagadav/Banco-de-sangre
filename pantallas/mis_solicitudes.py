@@ -95,10 +95,48 @@ def mostrar_mis_solicitudes(pantalla, centro, volver_stock):
                 detalle = (f'Grupo sanguíneo: {grupo}\n' f'Cantidad solicitada: {cantidad_texto}\n' f'Fecha del despacho: ' f'{solicitud["FECHA_DESPACHO"]}\n' f'Hora: {solicitud["HORA_DESPACHO"]}')
 
             ctk.CTkLabel(tarjeta,text=detalle,font=("Arial", 14),text_color=AZUL,justify="left",anchor="w",wraplength=480).pack(fill="x",padx=20,pady=5)
-
+            centro_redirigido = solicitud.get("CENTRO_EXTERNO_DESTINO")
+            estado_redireccion = solicitud.get("ESTADO_REDIRECCION")
+            if tipo == "Emergencia" and centro_redirigido:
+                aviso_red = ctk.CTkFrame(
+                    tarjeta,
+                    fg_color="#FEF3C7",
+                    corner_radius=10,
+                    border_width=1,
+                    border_color="#F59E0B",
+                )
+                aviso_red.pack(fill="x", padx=20, pady=(4, 6))
+                ctk.CTkLabel(
+                    aviso_red,
+                    text=(
+                        f"🏥 Redirigida a: {centro_redirigido}\n"
+                        f"Estado derivación: {estado_redireccion or 'Pendiente de confirmación del centro'}"
+                    ),
+                    font=("Arial", 14, "bold"),
+                    text_color="#92400E",
+                    justify="left",
+                    anchor="w",
+                    wraplength=450,
+                ).pack(fill="x", padx=12, pady=8)
+            elif tipo == "Emergencia" and estado == "No resuelta - Sin stock externo":
+                aviso_sin = ctk.CTkFrame(
+                    tarjeta,
+                    fg_color="#FEE2E2",
+                    corner_radius=10,
+                    border_width=1,
+                    border_color="#EF4444",
+                )
+                aviso_sin.pack(fill="x", padx=20, pady=(4, 6))
+                ctk.CTkLabel(
+                    aviso_sin,
+                    text="⚠️ Sin stock propio ni centros externos disponibles",
+                    font=("Arial", 13, "bold"),
+                    text_color="#991B1B",
+                    anchor="w",
+                ).pack(fill="x", padx=12, pady=8)
             if estado in ("Aprobada", "Aprobado"):
                 color_estado = "#15803D"
-            elif estado in ("Rechazada", "Rechazado"):
+            elif estado in ("Rechazada", "Rechazado","No resuelta - Sin stock externo"):
                 color_estado = "#C62828"
             else:
                 color_estado = "#B45309"
