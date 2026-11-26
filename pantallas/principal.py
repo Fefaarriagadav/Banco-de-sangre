@@ -9,6 +9,7 @@ from pantallas.stocks import mostrar_stocks
 from pantallas.alertas_redistribucion import mostrar_alertas_redistribucion
 from pantallas.solicitudes_pendientes import mostrar_solicitudes_pendientes
 from servicios.despachos import consultar_solicitudes_pendientes
+from pantallas.muestras import mostrar_muestras
 import sqlite3
 
 def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventana principal una vez ya se haya ingresado sesión
@@ -130,6 +131,22 @@ def mostrar_principal(pantalla, nombre, rol, empleado_id, volver_login): #ventan
 
     boton_solicitudes = ctk.CTkButton(menu_lateral,text="Solicitudes de despacho 📋",command=abrir_solicitudes,width=210,height=45,fg_color="#193653",text_color="#FFFFFF")
     boton_solicitudes.place(x=20, y=520)
+    def abrir_muestras():
+        mostrar_muestras(frame_contenido, empleado_id)
+        menu_lateral.place_forget()
+
+    if str(rol).strip().casefold() == "enfermero":
+        boton_muestras = ctk.CTkButton(
+            menu_lateral,
+            text="Muestras de laboratorio",
+            command=abrir_muestras,
+            width=210,
+            height=45,
+            fg_color="#7C3AED",
+            hover_color="#6D28D9",
+            text_color="#FFFFFF",
+        )
+        boton_muestras.place(x=20, y=580)
     boton_cerrar_sesion = ctk.CTkButton(menu_lateral, text="Cerrar sesión", width=210, height=45, text_color="#FFFFFF", fg_color="#FF0000", command=cerrar_sesion)
     boton_cerrar_sesion.place(x=20, y=655)
 

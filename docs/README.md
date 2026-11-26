@@ -393,3 +393,28 @@ Otras bibliotecas utilizadas, como sqlite3, smtplib, email, os y pathlib, forman
 
 - *Vida útil de las unidades (VIDA_UTIL_DIAS):* actualmente es de 20 días, regla provisional heredada del proyecto. Podría ser de hasta 35 días; el equipo debe acordar y validar el valor definitivo.
 - *Reglas de donación:* confirmar con el equipo (y con la normativa aplicable) la espera por sexo (3 meses hombres, 4 meses mujeres), la cantidad máxima de 450 cc y el umbral de peso de 50 kg.
+
+### HU14-T1: Registro y consulta de muestras
+
+El rol Enfermero puede acceder a "Muestras de laboratorio"
+desde el menú lateral.
+
+Permite registrar varias muestras por donación, cada una con ID único,
+fecha, hora y responsable. Al registrar una muestra, tanto esta como
+la unidad quedan en estado "Pendiente de análisis", y la unidad deja
+de contarse como disponible.
+
+Permite consultar por ID de muestra o ID de donación. Los permisos
+se validan también en el servicio.
+
+El registro, el cambio de disponibilidad y el historial se guardan
+en una misma transacción. Si falla una escritura, se revierte todo.
+
+No admite registrar muestras para unidades vencidas, usadas,
+descartadas, reservadas o bloqueadas.
+
+La migración crea MUESTRAS e HISTORIAL_MUESTRAS sin borrar datos.
+Los resultados y la liberación de unidades corresponden a T2 y T3.
+
+Validación: 16 pruebas nuevas; suites completas con 107 pruebas
+del Sprint 1 y 50 del Sprint 2 aprobadas.
