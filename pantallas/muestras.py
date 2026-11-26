@@ -282,7 +282,35 @@ def mostrar_muestras(pantalla, empleado_id):
         text="Consultar",
         command=buscar,
     ).grid(row=0, column=2, padx=15, pady=15)
+    def abrir_resultados():
+        seleccion = tabla.selection()
 
+        if not seleccion:
+            mensaje.configure(
+                text="Seleccione una muestra en la tabla.",
+                text_color="#DC2626",
+            )
+            return
+
+        valores = tabla.item(seleccion[0], "values")
+        muestra_id = int(valores[0])
+
+        from pantallas.resultados_analisis import (
+            mostrar_resultados_analisis,
+        )
+
+        mostrar_resultados_analisis(
+            pantalla,
+            muestra_id,
+            empleado_id,
+        )
+
+    ctk.CTkButton(
+        consulta,
+        text="Resultados de la muestra",
+        command=abrir_resultados,
+    ).grid(row=0, column=3, padx=15, pady=15)
+    
     entrada_busqueda.bind(
         "<Return>", lambda evento: buscar()
     )

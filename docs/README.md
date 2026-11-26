@@ -418,3 +418,56 @@ Los resultados y la liberación de unidades corresponden a T2 y T3.
 
 Validación: 16 pruebas nuevas; suites completas con 107 pruebas
 del Sprint 1 y 50 del Sprint 2 aprobadas.
+
+### HU14-T2: Registro y consulta de resultados
+
+Desde "Muestras de laboratorio", un Enfermero puede consultar una muestra,
+seleccionar su fila y abrir "Resultados de la muestra".
+
+Permite registrar:
+- Análisis seleccionado desde un catálogo configurable.
+- Resultado informado por laboratorio.
+- Clasificación: Pendiente, Conforme o No conforme.
+- Observaciones, fecha y responsable.
+
+Para corregir un resultado existente se exige un motivo.
+Cada modificación genera una nueva versión y conserva las anteriores
+en el historial.
+
+Los resultados parciales mantienen la muestra Pendiente de análisis.
+Al completar los controles obligatorios pasa a Pendiente de revisión.
+Esto no significa que todos los resultados sean conformes ni libera
+la unidad: esta permanece fuera del stock disponible.
+
+El catálogo habitual se crea vacío. Sin controles obligatorios configurados,
+los análisis no se consideran completos. Los controles y las reglas clínicas
+deben validarse con el Product Owner.
+
+El bloqueo automático y la autorización de liberación corresponden a T3.
+
+#### Demo de HU14
+
+```powershell
+python scripts/crear_demo_hu14.py
+$env:BANCO_SANGRE_BD = Join-Path $PWD "BancoDeSangre_HU14_demo.db"
+python pantalla.py
+```
+
+Iniciar sesión con ID 1. La demo contiene la donación 1, una muestra
+y dos controles ficticios obligatorios, sin validez clínica.
+El generador no sobrescribe una demo existente.
+
+Para volver a la base habitual, cerrar la aplicación y ejecutar:
+
+```powershell
+Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
+python pantalla.py
+```
+
+#### Validación
+
+18 pruebas nuevas de T2. Suites completas:
+107 pruebas del Sprint 1 y 68 del Sprint 2 aprobadas.
+
+Se verificaron permisos, resultados parciales, versiones, motivos de
+corrección, transacciones y conservación de la exclusión del stock.

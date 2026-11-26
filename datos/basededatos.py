@@ -5,6 +5,8 @@ from servicios.despachos import migrar_despachos
 from servicios.rutas_logisticas import migrar_rutas_logisticas
 from servicios.vencimientos import migrar
 from servicios.redireccion_emergencias import migrar_redirecciones
+from servicios.muestras import migrar_muestras
+from servicios.resultados_analisis import migrar_resultados
 
 def inicializar_base(ruta=RUTA_BD):
     conexion = sqlite3.connect(ruta) # conecta con la base de datos "bancoDeSangre" (si no existe, la crea)
@@ -70,6 +72,6 @@ def inicializar_base(ruta=RUTA_BD):
     migrar_rutas_logisticas(conexion)
     migrar_redirecciones(conexion)
     migrar_muestras(conexion)
-    
+    migrar_resultados(conexion)
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos
