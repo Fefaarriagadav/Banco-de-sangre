@@ -108,9 +108,9 @@ class PruebasH4(unittest.TestCase):
             filas = [tuple(fila) for fila in c.execute("SELECT ESTADO_ANTERIOR, ESTADO_NUEVO, EMPLEADO_ID FROM HISTORIAL_HABILITACION ORDER BY ID").fetchall()]
         self.assertEqual(filas, [(e.APTO, e.TEMPORAL, 1), (e.TEMPORAL, e.APTO, 1)])
 
-    def test_migracion_sobre_base_real_no_pierde_datos(self):
-        real = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "BancoDeSangre.db")
-        copia = os.path.join(self.dir, "real.db"); shutil.copy(real, copia)
+    def test_migracion_repetida_no_pierde_datos(self):
+        copia = os.path.join(self.dir, "copia.db")
+        shutil.copy(self.bd, copia)
         def n():
             with e.conectar(copia) as c:
                 return c.execute("SELECT COUNT(*) FROM DONANTES").fetchone()[0]

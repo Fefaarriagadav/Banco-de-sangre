@@ -1,3 +1,4 @@
+from contextlib import closing
 import unittest
 import sqlite3
 import tempfile
@@ -15,7 +16,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             Path(self.temporal.name) / "test_aprobacion.db"
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             conexion.executescript("""
                 PRAGMA foreign_keys = ON;
@@ -106,7 +107,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO
@@ -134,7 +135,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO, MOTIVO_RECHAZO
@@ -172,7 +173,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             )
 
         # Verificar que la solicitud siga pendiente
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO

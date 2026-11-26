@@ -1,3 +1,4 @@
+from contextlib import closing
 import unittest
 import sqlite3
 import tempfile
@@ -14,7 +15,7 @@ class TestDespachoEmergencia(unittest.TestCase):
             Path(self.temporal.name) / "test_emergencia.db"
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             conexion.executescript("""
                 CREATE TABLE CENTROS_MEDICOS (
@@ -67,7 +68,7 @@ class TestDespachoEmergencia(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitud = conexion.execute("""
                 SELECT
@@ -121,7 +122,7 @@ class TestDespachoEmergencia(unittest.TestCase):
                 ruta=self.ruta
             )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitudes = conexion.execute("""
                 SELECT COUNT(*)
@@ -150,7 +151,7 @@ class TestDespachoEmergencia(unittest.TestCase):
                 ruta=self.ruta
             )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitudes = conexion.execute("""
                 SELECT COUNT(*)
