@@ -9,8 +9,8 @@ from servicios.resultados_analisis import (
     PENDIENTE,
     consultar_resultados,
     guardar_resultado,
+    guardar_informe,
 )
-
 
 def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
     anterior = getattr(pantalla, "_pantalla_resultados", None)
@@ -66,15 +66,37 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
     )
 
     ctk.CTkLabel(
-        formulario, text="Clasificación informada"
+        formulario, text="Resultado del control"
     ).grid(row=0, column=2, padx=10, pady=5)
 
-    clasificacion = ctk.CTkOptionMenu(
-        formulario,
-        values=list(CLASIFICACIONES),
+    clasificacion = ctk.StringVar(value=PENDIENTE)
+
+    opciones_resultado = ctk.CTkFrame(
+        formulario, fg_color="transparent"
     )
-    clasificacion.set(PENDIENTE)
-    clasificacion.grid(row=0, column=3, padx=10, pady=5)
+    opciones_resultado.grid(
+        row=0, column=3, padx=10, pady=5
+    )
+
+    def seleccionar_clasificacion(texto):
+        resultado.delete(0, "end")
+        resultado.insert(0, texto)
+
+    for etiqueta, valor, texto_informe in (
+        ("PENDIENTE", PENDIENTE, ""),
+        ("NEGATIVO", "Conforme", "Negativo"),
+        ("POSITIVO", "No conforme", "Positivo"),
+    ):
+        ctk.CTkRadioButton(
+            opciones_resultado,
+            text=etiqueta,
+            variable=clasificacion,
+            value=valor,
+            width=110,
+            command=lambda texto=texto_informe: (
+                seleccionar_clasificacion(texto)
+            ),
+        ).pack(side="left", padx=5)
 
     ctk.CTkLabel(
         formulario, text="Resultado del informe"
@@ -425,6 +447,177 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
 
         presentar(datos)
 
+    def abrir_informe():
+        try:
+            datos = consultar_resultados(muestra_id, empleado_id)
+        except (ValueError, PermissionError, sqlite3.Error) as error:
+            informar_error(error)
+            return
+
+        ventana = ctk.CTkToplevel(pantalla)
+        ventana.title("Informe de controles de laboratorio")
+        ventana.geometry("1050x650")
+        ventana.transient(pantalla)
+        ventana.grab_set()
+
+        ctk.CTkLabel(
+            ventana,
+            text=(
+                f"Donación #{datos['MUESTRA']['DONACION_ID']}"
+                f" · Muestra #{muestra_id}"
+            ),
+            font=("Arial", 21, "bold"),
+        ).pack(pady=12)
+
+        ctk.CTkLabel(
+            ventana,
+            text=(
+                "Seleccione una opción por control. "
+                "Guardar no autoriza la liberación."
+            ),
+        ).pack(pady=5)
+
+        acciones_informe = ctk.CTkFrame(ventana)
+        acciones_informe.pack(
+            side="bottom", fill="x", padx=15, pady=10
+        )
+
+        cuerpo_informe = ctk.CTkScrollableFrame(ventana)
+        cuerpo_informe.pack(
+            fill="both", expand=True, padx=15, pady=5
+        )
+
+        actuales = {
+            fila["ANALISIS_ID"]: fila
+            for fila in datos["RESULTADOS"]
+        }
+        selecciones = {}
+
+        for control in datos["CATALOGO"]:
+            fila = ctk.CTkFrame(cuerpo_informe)
+            fila.pack(fill="x", pady=5)
+            fila.grid_columnconfigure(0, weight=1)
+
+            ctk.CTkLabel(
+                fila,
+                text=control["NOMBRE"],
+                anchor="w",
+            ).grid(
+                row=0, column=0,
+                padx=10, pady=10, sticky="ew",
+            )
+
+            anterior = actuales.get(control["ID"])
+            elegida = "PENDIENTE"
+
+            if anterior and anterior["CLASIFICACION"] != "Pendiente":
+                texto = anterior["RESULTADO"].strip().upper()
+                esperada = {
+                    "NEGATIVO": "Conforme",
+                    "POSITIVO": "No conforme",
+                }
+
+                if esperada.get(texto) == anterior["CLASIFICACION"]:
+                    elegida = texto
+                else:
+                    elegida = ""
+
+            variable = ctk.StringVar(
+                master=ventana, value=elegida
+            )
+            selecciones[control["ID"]] = variable
+
+            for columna, opcion in enumerate(
+                ("PENDIENTE", "NEGATIVO", "POSITIVO"),
+                start=1,
+            ):
+                ctk.CTkRadioButton(
+                    fila,
+                    text=opcion,
+                    variable=variable,
+                    value=opcion,
+                    width=115,
+                ).grid(
+                    row=0, column=columna,
+                    padx=8, pady=10,
+                )
+
+            if anterior:
+                ctk.CTkLabel(
+                    fila,
+                    text=(
+                        f"Guardado: "
+                        f"{anterior['RESULTADO'] or 'Pendiente'}"
+                        f" · {anterior['CLASIFICACION']}"
+                        f" · versión {anterior['VERSION']}"
+                    ),
+                    wraplength=900,
+                ).grid(
+                    row=1, column=0, columnspan=4,
+                    padx=10, sticky="w",
+                )
+
+        motivo_informe = ctk.CTkEntry(
+            acciones_informe,
+            placeholder_text=(
+                "Motivo de corrección: obligatorio al "
+                "cambiar resultados existentes"
+            ),
+        )
+        motivo_informe.pack(fill="x", padx=10, pady=8)
+
+        aviso = ctk.CTkLabel(
+            acciones_informe, text="", wraplength=950
+        )
+        aviso.pack(pady=5)
+
+        def guardar_todo():
+            controles = [
+                {
+                    "analisis_id": identificador,
+                    "seleccion": variable.get(),
+                }
+                for identificador, variable
+                in selecciones.items()
+            ]
+
+            try:
+                nuevos = guardar_informe(
+                    muestra_id=muestra_id,
+                    controles=controles,
+                    empleado_id=empleado_id,
+                    motivo_cambio=motivo_informe.get(),
+                )
+            except (
+                ValueError, PermissionError, sqlite3.Error
+            ) as error:
+                aviso.configure(
+                    text=str(error), text_color="#F87171"
+                )
+                return
+
+            presentar(nuevos)
+            mensaje.configure(
+                text=(
+                    "Informe guardado. La liberación "
+                    "requiere autorización explícita."
+                ),
+                text_color=("#166534", "#86EFAC"),
+            )
+            ventana.destroy()
+
+        ctk.CTkButton(
+            acciones_informe,
+            text="Guardar informe",
+            command=guardar_todo,
+        ).pack(side="left", padx=10, pady=8)
+
+        ctk.CTkButton(
+            acciones_informe,
+            text="Cancelar",
+            command=ventana.destroy,
+        ).pack(side="right", padx=10, pady=8)
+
     def guardar():
         analisis_id = analisis_por_etiqueta.get(selector.get())
 
@@ -481,6 +674,12 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
         pie_acciones, fg_color="transparent"
     )
     acciones.pack(pady=10)
+
+    ctk.CTkButton(
+        acciones,
+        text="Completar informe",
+        command=abrir_informe,
+    ).pack(side="left", padx=8)
 
     boton_guardar = ctk.CTkButton(
         acciones,

@@ -20,6 +20,15 @@ from servicios.vencimientos import (
     fecha_actual,
 )
 
+ANALISIS_DEMO = [
+    (1, "VIH_1_2", "Tamizaje de VIH 1 y 2"),
+    (2, "HEPATITIS_B", "Tamizaje de hepatitis B"),
+    (3, "HEPATITIS_C", "Tamizaje de hepatitis C"),
+    (4, "HTLV_1_2", "Tamizaje de HTLV I y II"),
+    (5, "CHAGAS", "Tamizaje de enfermedad de Chagas"),
+    (6, "SIFILIS", "Tamizaje de sífilis"),
+]
+
 
 def crear_demo():
     ruta = RAIZ / "BancoDeSangre_HU14_demo.db"
@@ -68,7 +77,7 @@ def crear_demo():
             VALUES (?, ?, ?, ?)
             """,
             [
-                (1, "DEMO-HU14-1", "Enfermero demo", "Enfermero"),
+                (1, "DEMO-HU14-1", "Matías Palacios", "Enfermero"),
                 (2, "DEMO-HU14-2", "Entrevistador demo", "Entrevistador"),
             ],
         )
@@ -80,10 +89,7 @@ def crear_demo():
             )
             VALUES (?, ?, ?, 1, 1)
             """,
-            [
-                (1, "DEMO_1", "Control ficticio uno"),
-                (2, "DEMO_2", "Control ficticio dos"),
-            ],
+            ANALISIS_DEMO,
         )
 
         for identificador, ((grupo, rh), caso) in enumerate(
@@ -150,8 +156,8 @@ def crear_demo():
         )
 
     def completar(muestra_id):
-        resultado(muestra_id, 1)
-        resultado(muestra_id, 2)
+        for analisis_id, codigo, nombre in ANALISIS_DEMO:
+            resultado(muestra_id, analisis_id)
 
     def liberar(donacion_id):
         autorizar_liberacion(
@@ -177,8 +183,17 @@ def crear_demo():
 
     # Caso 5: el segundo control bloquea automáticamente.
     muestra_bloqueada = muestra(5)
-    resultado(muestra_bloqueada, 1)
-    resultado(muestra_bloqueada, 2, "No conforme")
+
+    for analisis_id, codigo, nombre in ANALISIS_DEMO:
+        clasificacion = (
+            "No conforme" if analisis_id == 2 else "Conforme"
+        )
+
+        resultado(
+            muestra_bloqueada,
+            analisis_id,
+            clasificacion,
+        )
 
     # Caso 6: autorización explícita.
     muestra_liberada = muestra(6)

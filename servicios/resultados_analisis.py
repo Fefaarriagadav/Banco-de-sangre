@@ -237,6 +237,238 @@ def consultar_resultados(
         return _consultar(conexion, muestra_id)
 
 
+def _guardar_resultado_en_conexion(
+    conexion,
+    muestra_id,
+    analisis_id,
+    resultado,
+    clasificacion,
+    empleado_id,
+    observaciones,
+    motivo_cambio,
+    instante,
+    actualizar_estado=True,
+):
+
+    empleado_id = validar_enfermero(conexion, empleado_id)
+    muestra_id = validar_identificador(
+        muestra_id, "muestra"
+    )
+    analisis_id = validar_identificador(
+        analisis_id, "análisis"
+    )
+
+    muestra = _obtener_muestra(conexion, muestra_id)
+
+    if muestra["ESTADO"] not in (
+        PENDIENTE_ANALISIS,
+        PENDIENTE_REVISION,
+    ):
+        raise ValueError(
+            "La muestra no admite modificaciones de resultados "
+            "en su estado actual."
+        )
+
+    pendiente = (
+        muestra["ESTADO_UNIDAD"] == PENDIENTE_ANALISIS
+        and muestra["ESTADO_LABORATORIO"]
+        == PENDIENTE_ANALISIS
+    )
+
+    bloqueada_por_laboratorio = (
+        muestra["ESTADO_UNIDAD"] == "Bloqueada"
+        and muestra["ESTADO_LABORATORIO"] == "Bloqueada"
+    )
+
+    if not (pendiente or bloqueada_por_laboratorio):
+        raise ValueError(
+            "Solo se admiten resultados para unidades pendientes "
+            "o bloqueadas por laboratorio. No se modificarán "
+            "unidades liberadas, reservadas, usadas, descartadas "
+            "o vencidas."
+        )
+
+    vencimiento = validar_fecha(
+        muestra["FECHA_VENCIMIENTO"], "%Y-%m-%d"
+    )
+
+    if vencimiento < instante.date():
+        raise ValueError(
+            "No se pueden registrar resultados mediante este "
+            "flujo para una unidad que ya venció."
+        )
+
+    analisis = conexion.execute(
+        """
+        SELECT ID
+        FROM CATALOGO_ANALISIS
+        WHERE ID = ? AND ACTIVO = 1
+        """,
+        (analisis_id,),
+    ).fetchone()
+
+    if analisis is None:
+        raise ValueError(
+            "El análisis no existe o no está activo."
+        )
+
+    if clasificacion not in CLASIFICACIONES:
+        raise ValueError(
+            "Seleccione Pendiente, Conforme o No conforme."
+        )
+
+    resultado = _texto(
+        resultado,
+        "Resultado",
+        2000,
+        permitir_vacio=clasificacion == PENDIENTE,
+    )
+    observaciones = _texto(
+        observaciones,
+        "Observaciones",
+        2000,
+        permitir_vacio=True,
+    )
+
+    anterior = conexion.execute(
+        """
+        SELECT ID, VERSION
+        FROM RESULTADOS_ANALISIS
+        WHERE MUESTRA_ID = ? AND ANALISIS_ID = ?
+        """,
+        (muestra_id, analisis_id),
+    ).fetchone()
+
+    fecha = instante.isoformat(timespec="microseconds")
+
+    if anterior is None:
+        version = 1
+        motivo = "Registro inicial"
+
+        cursor = conexion.execute(
+            """
+            INSERT INTO RESULTADOS_ANALISIS (
+                MUESTRA_ID, ANALISIS_ID,
+                RESULTADO, CLASIFICACION, OBSERVACIONES,
+                RESPONSABLE_ID, FECHA, VERSION
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                muestra_id,
+                analisis_id,
+                resultado,
+                clasificacion,
+                observaciones,
+                empleado_id,
+                fecha,
+                version,
+            ),
+        )
+        resultado_id = cursor.lastrowid
+
+    else:
+        motivo = _texto(
+            motivo_cambio, "Motivo del cambio", 1000
+        )
+        resultado_id = anterior["ID"]
+        version = anterior["VERSION"] + 1
+
+        conexion.execute(
+            """
+            UPDATE RESULTADOS_ANALISIS
+            SET RESULTADO = ?,
+                CLASIFICACION = ?,
+                OBSERVACIONES = ?,
+                RESPONSABLE_ID = ?,
+                FECHA = ?,
+                VERSION = ?
+            WHERE ID = ?
+            """,
+            (
+                resultado,
+                clasificacion,
+                observaciones,
+                empleado_id,
+                fecha,
+                version,
+                resultado_id,
+            ),
+        )
+
+    # Cada versión guarda una copia completa del resultado.
+    conexion.execute(
+        """
+        INSERT INTO HISTORIAL_RESULTADOS (
+            RESULTADO_ID, VERSION,
+            RESULTADO, CLASIFICACION, OBSERVACIONES,
+            RESPONSABLE_ID, FECHA, MOTIVO
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            resultado_id,
+            version,
+            resultado,
+            clasificacion,
+            observaciones,
+            empleado_id,
+            fecha,
+            motivo,
+        ),
+    )
+
+    if not actualizar_estado:
+        return None
+
+    datos = _consultar(conexion, muestra_id)
+
+    estado_nuevo = (
+        PENDIENTE_REVISION
+        if datos["COMPLETOS"]
+        else PENDIENTE_ANALISIS
+    )
+
+    if estado_nuevo != muestra["ESTADO"]:
+        conexion.execute(
+            "UPDATE MUESTRAS SET ESTADO = ? WHERE ID = ?",
+            (estado_nuevo, muestra_id),
+        )
+
+        conexion.execute(
+            """
+            INSERT INTO HISTORIAL_MUESTRAS (
+                MUESTRA_ID, ACCION,
+                ESTADO_ANTERIOR, ESTADO_NUEVO,
+                RESPONSABLE_ID, FECHA, MOTIVO
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                muestra_id,
+                "Actualización de resultados",
+                muestra["ESTADO"],
+                estado_nuevo,
+                empleado_id,
+                fecha,
+                "Actualización de completitud de análisis. "
+                "No autoriza la liberación de la unidad.",
+            ),
+        )
+    # HU14-T3: resultado, historial y decisión de laboratorio
+    # se confirman o revierten juntos.
+    from servicios.liberacion import evaluar_en_transaccion
+
+    evaluar_en_transaccion(
+        conexion,
+        muestra["DONACION_ID"],
+        empleado_id,
+        instante,
+        muestra_id=muestra_id,
+    )
+
+    return _consultar(conexion, muestra_id)
+
 def guardar_resultado(
     muestra_id,
     analisis_id,
@@ -253,218 +485,152 @@ def guardar_resultado(
     with conectar(ruta) as conexion:
         conexion.execute("BEGIN IMMEDIATE")
 
-        empleado_id = validar_enfermero(conexion, empleado_id)
-        muestra_id = validar_identificador(
-            muestra_id, "muestra"
-        )
-        analisis_id = validar_identificador(
-            analisis_id, "análisis"
-        )
+        return _guardar_resultado_en_conexion(
 
-        muestra = _obtener_muestra(conexion, muestra_id)
-
-        if muestra["ESTADO"] not in (
-            PENDIENTE_ANALISIS,
-            PENDIENTE_REVISION,
-        ):
-            raise ValueError(
-                "La muestra no admite modificaciones de resultados "
-                "en su estado actual."
-            )
-
-        pendiente = (
-            muestra["ESTADO_UNIDAD"] == PENDIENTE_ANALISIS
-            and muestra["ESTADO_LABORATORIO"]
-            == PENDIENTE_ANALISIS
-        )
-
-        bloqueada_por_laboratorio = (
-            muestra["ESTADO_UNIDAD"] == "Bloqueada"
-            and muestra["ESTADO_LABORATORIO"] == "Bloqueada"
-        )
-
-        if not (pendiente or bloqueada_por_laboratorio):
-            raise ValueError(
-                "Solo se admiten resultados para unidades pendientes "
-                "o bloqueadas por laboratorio. No se modificarán "
-                "unidades liberadas, reservadas, usadas, descartadas "
-                "o vencidas."
-            )
-
-        vencimiento = validar_fecha(
-            muestra["FECHA_VENCIMIENTO"], "%Y-%m-%d"
-        )
-
-        if vencimiento < instante.date():
-            raise ValueError(
-                "No se pueden registrar resultados mediante este "
-                "flujo para una unidad que ya venció."
-            )
-
-        analisis = conexion.execute(
-            """
-            SELECT ID
-            FROM CATALOGO_ANALISIS
-            WHERE ID = ? AND ACTIVO = 1
-            """,
-            (analisis_id,),
-        ).fetchone()
-
-        if analisis is None:
-            raise ValueError(
-                "El análisis no existe o no está activo."
-            )
-
-        if clasificacion not in CLASIFICACIONES:
-            raise ValueError(
-                "Seleccione Pendiente, Conforme o No conforme."
-            )
-
-        resultado = _texto(
+            conexion,
+            muestra_id,
+            analisis_id,
             resultado,
-            "Resultado",
-            2000,
-            permitir_vacio=clasificacion == PENDIENTE,
-        )
-        observaciones = _texto(
+            clasificacion,
+            empleado_id,
             observaciones,
-            "Observaciones",
-            2000,
-            permitir_vacio=True,
+            motivo_cambio,
+            instante,
         )
 
-        anterior = conexion.execute(
-            """
-            SELECT ID, VERSION
-            FROM RESULTADOS_ANALISIS
-            WHERE MUESTRA_ID = ? AND ANALISIS_ID = ?
-            """,
-            (muestra_id, analisis_id),
-        ).fetchone()
+def guardar_informe(
+    muestra_id,
+    controles,
+    empleado_id,
+    motivo_cambio="",
+    ruta=RUTA_BD,
+    ahora=None,
+):
+    """Guarda todos los controles juntos, sin autorizar la liberación."""
+    opciones = {
+        "PENDIENTE": ("", PENDIENTE),
+        "NEGATIVO": ("Negativo", "Conforme"),
+        "POSITIVO": ("Positivo", "No conforme"),
+    }
 
-        fecha = instante.isoformat(timespec="microseconds")
+    if not isinstance(controles, (list, tuple)) or not controles:
+        raise ValueError("El informe debe contener sus controles.")
 
-        if anterior is None:
-            version = 1
-            motivo = "Registro inicial"
+    instante = obtener_instante(ahora)
 
-            cursor = conexion.execute(
-                """
-                INSERT INTO RESULTADOS_ANALISIS (
-                    MUESTRA_ID, ANALISIS_ID,
-                    RESULTADO, CLASIFICACION, OBSERVACIONES,
-                    RESPONSABLE_ID, FECHA, VERSION
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    muestra_id,
-                    analisis_id,
-                    resultado,
-                    clasificacion,
-                    observaciones,
-                    empleado_id,
-                    fecha,
-                    version,
-                ),
-            )
-            resultado_id = cursor.lastrowid
+    with conectar(ruta) as conexion:
+        conexion.execute("BEGIN IMMEDIATE")
 
-        else:
-            motivo = _texto(
-                motivo_cambio, "Motivo del cambio", 1000
-            )
-            resultado_id = anterior["ID"]
-            version = anterior["VERSION"] + 1
-
-            conexion.execute(
-                """
-                UPDATE RESULTADOS_ANALISIS
-                SET RESULTADO = ?,
-                    CLASIFICACION = ?,
-                    OBSERVACIONES = ?,
-                    RESPONSABLE_ID = ?,
-                    FECHA = ?,
-                    VERSION = ?
-                WHERE ID = ?
-                """,
-                (
-                    resultado,
-                    clasificacion,
-                    observaciones,
-                    empleado_id,
-                    fecha,
-                    version,
-                    resultado_id,
-                ),
-            )
-
-        # Cada versión guarda una copia completa del resultado.
-        conexion.execute(
-            """
-            INSERT INTO HISTORIAL_RESULTADOS (
-                RESULTADO_ID, VERSION,
-                RESULTADO, CLASIFICACION, OBSERVACIONES,
-                RESPONSABLE_ID, FECHA, MOTIVO
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                resultado_id,
-                version,
-                resultado,
-                clasificacion,
-                observaciones,
-                empleado_id,
-                fecha,
-                motivo,
-            ),
-        )
+        empleado_id = validar_enfermero(conexion, empleado_id)
+        muestra_id = validar_identificador(muestra_id, "muestra")
 
         datos = _consultar(conexion, muestra_id)
 
-        estado_nuevo = (
-            PENDIENTE_REVISION
-            if datos["COMPLETOS"]
-            else PENDIENTE_ANALISIS
-        )
+        catalogo = {
+            fila["ID"]: fila
+            for fila in datos["CATALOGO"]
+        }
 
-        if estado_nuevo != muestra["ESTADO"]:
-            conexion.execute(
-                "UPDATE MUESTRAS SET ESTADO = ? WHERE ID = ?",
-                (estado_nuevo, muestra_id),
+        obligatorios = {
+            identificador
+            for identificador, fila in catalogo.items()
+            if fila["OBLIGATORIO"]
+        }
+
+        if not obligatorios:
+            raise ValueError(
+                "No hay controles obligatorios configurados."
             )
 
-            conexion.execute(
-                """
-                INSERT INTO HISTORIAL_MUESTRAS (
-                    MUESTRA_ID, ACCION,
-                    ESTADO_ANTERIOR, ESTADO_NUEVO,
-                    RESPONSABLE_ID, FECHA, MOTIVO
+        anteriores = {
+            fila["ANALISIS_ID"]: fila
+            for fila in datos["RESULTADOS"]
+        }
+
+        vistos = set()
+        cambios = []
+
+        for control in controles:
+            if not isinstance(control, dict):
+                raise ValueError(
+                    "Cada control debe ser un registro válido."
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    muestra_id,
-                    "Actualización de resultados",
-                    muestra["ESTADO"],
-                    estado_nuevo,
-                    empleado_id,
-                    fecha,
-                    "Actualización de completitud de análisis. "
-                    "No autoriza la liberación de la unidad.",
-                ),
-            )
-        # HU14-T3: resultado, historial y decisión de laboratorio
-        # se confirman o revierten juntos.
-        from servicios.liberacion import evaluar_en_transaccion
 
-        evaluar_en_transaccion(
-            conexion,
-            muestra["DONACION_ID"],
-            empleado_id,
-            instante,
-            muestra_id=muestra_id,
-        )
+            identificador = validar_identificador(
+                control.get("analisis_id"), "análisis"
+            )
+            seleccion = control.get("seleccion")
+
+            if (
+                not isinstance(seleccion, str)
+                or seleccion not in opciones
+            ):
+                raise ValueError(
+                    "Seleccione PENDIENTE, NEGATIVO o POSITIVO."
+                )
+
+            if identificador in vistos:
+                raise ValueError(
+                    "Hay un control repetido en el informe."
+                )
+
+            if identificador not in catalogo:
+                raise ValueError(
+                    "El informe contiene un control "
+                    "inexistente o inactivo."
+                )
+
+            vistos.add(identificador)
+
+            resultado, clasificacion = opciones[seleccion]
+            anterior = anteriores.get(identificador)
+
+            observaciones = _texto(
+                control.get(
+                    "observaciones",
+                    anterior["OBSERVACIONES"] if anterior else "",
+                ),
+                "Observaciones",
+                2000,
+                permitir_vacio=True,
+            )
+
+            if anterior and (
+                anterior["RESULTADO"] == resultado
+                and anterior["CLASIFICACION"] == clasificacion
+                and anterior["OBSERVACIONES"] == observaciones
+            ):
+                continue
+
+            cambios.append(
+                (
+                    identificador,
+                    resultado,
+                    clasificacion,
+                    observaciones,
+                )
+            )
+
+        if not obligatorios.issubset(vistos):
+            raise ValueError(
+                "El informe debe incluir todos "
+                "los controles obligatorios."
+            )
+
+        for posicion, cambio in enumerate(cambios):
+            identificador, resultado, clasificacion, observaciones = cambio
+
+            _guardar_resultado_en_conexion(
+                conexion=conexion,
+                muestra_id=muestra_id,
+                analisis_id=identificador,
+                resultado=resultado,
+                clasificacion=clasificacion,
+                empleado_id=empleado_id,
+                observaciones=observaciones,
+                motivo_cambio=motivo_cambio,
+                instante=instante,
+                actualizar_estado=posicion == len(cambios) - 1,
+            )
 
         return _consultar(conexion, muestra_id)

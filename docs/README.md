@@ -508,3 +508,59 @@ liberación, revocación por nueva muestra y vencimiento.
 
 Los controles de demostración son ficticios y no tienen validez clínica.
 El catálogo obligatorio y sus reglas requieren validación del PO.
+
+### HU14 — Control de muestras y resultados de laboratorio
+
+- Registro y consulta de muestras asociadas a donaciones existentes.
+- Identificación de muestra, donación, responsable y fecha de registro.
+- Catálogo de controles obligatorios: VIH 1/2, hepatitis B,
+  hepatitis C, HTLV I/II, Chagas y sífilis.
+- Formulario «Completar informe» para registrar todos los controles
+  juntos con selección exclusiva: Pendiente, Negativo o Positivo.
+- Guardado del informe en una transacción: si falla un control,
+  se revierten todos los cambios de esa operación.
+- Registro individual para corregir un control puntual.
+- Correcciones con motivo e historial de versiones, fecha y responsable.
+- Bloqueo por resultados no conformes y autorización explícita
+  de liberación cuando se cumplen los requisitos.
+- Integración con stock: unidades pendientes, bloqueadas o vencidas
+  no se consideran disponibles para despacho.
+
+El sistema registra resultados informados; no realiza análisis físicos
+ni emite diagnósticos médicos.
+
+#### Configuración de una base existente
+
+Con la aplicación cerrada, respaldar BancoDeSangre.db y ejecutar
+desde la raíz del proyecto:
+
+```powershell
+python scripts/configurar_catalogo_hu14.py
+```
+
+El script configura los controles obligatorios sin crear resultados
+ni autorizaciones. Puede repetirse sin duplicar los controles.
+Si detecta autorizaciones existentes que requieren revisión antes
+de cambiar los requisitos, detiene la carga del catálogo.
+
+Para abrir la aplicación con la base normal:
+
+```powershell
+Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
+python pantalla.py
+```
+
+No se agregan dependencias externas nuevas para estos cambios.
+Las bases y respaldos locales no deben incluirse en el commit.
+
+#### Validación
+
+Última ejecución local: 110 pruebas del Sprint 1 y 109 del Sprint 2,
+todas correctas. Queda pendiente incorporar al repositorio las pruebas
+específicas del guardado conjunto.
+
+```powershell
+python -m unittest discover -s "tests/Sprint 1" -v
+python -m unittest discover -s "tests/Sprint 2" -v
+git diff --check
+```
