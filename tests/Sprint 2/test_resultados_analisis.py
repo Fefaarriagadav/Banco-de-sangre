@@ -410,6 +410,292 @@ class ResultadosAnalisisTest(unittest.TestCase):
         self.assertEqual(len(datos["HISTORIAL"]), 1)
         self.assertEqual(datos["RESULTADOS"][0]["VERSION"], 1)
 
+    def _controles_hu14(self):
+        codigos = (
+            (1, "VIH_1_2"), (2, "HEPATITIS_B"),
+            (5, "HEPATITIS_C"), (6, "HTLV_1_2"),
+            (7, "CHAGAS"), (8, "SIFILIS"),
+        )
+        for identificador, codigo in codigos:
+            self.ejecutar(
+                """INSERT INTO CATALOGO_ANALISIS
+                   (ID, CODIGO, NOMBRE, OBLIGATORIO, ACTIVO)
+                   VALUES (?, ?, ?, 1, 1)
+                   ON CONFLICT(ID) DO UPDATE SET
+                       CODIGO=excluded.CODIGO,
+                       NOMBRE=excluded.NOMBRE,
+                       OBLIGATORIO=1, ACTIVO=1""",
+                (identificador, codigo, f"Control de prueba {codigo}"),
+            )
+        return [
+            {"analisis_id": identificador, "seleccion": "NEGATIVO"}
+            for identificador, _ in codigos
+        ]
+
+    def _informe_hu14(self, controles, motivo="", empleado=1):
+        return r.guardar_informe(
+            muestra_id=self.muestra_id,
+            controles=controles,
+            empleado_id=empleado,
+            motivo_cambio=motivo,
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+    def _filas_hu14(self, sql):
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            return conexion.execute(sql).fetchall()
+
+    def _copia_hu14(self):
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            return "\n".join(conexion.iterdump())
+
+    def test_informe_seis_negativos_no_libera_automaticamente(self):
+        datos = self._informe_hu14(self._controles_hu14())
+
+        self.assertTrue(datos["COMPLETOS"])
+        self.assertEqual(len(datos["RESULTADOS"]), 6)
+        self.assertEqual(len(datos["HISTORIAL"]), 6)
+        self.assertEqual(
+            datos["MUESTRA"]["ESTADO_UNIDAD"],
+            "Pendiente de análisis",
+        )
+        self.assertEqual(
+            datos["MUESTRA"]["ESTADO_LABORATORIO"],
+            "Pendiente de análisis",
+        )
+        self.assertEqual(
+            self._filas_hu14("SELECT ELEGIBLE FROM DONANTES"),
+            [("Donante apto",)],
+        )
+
+    def test_informe_con_pendiente_no_esta_completo(self):
+        controles = self._controles_hu14()
+        controles[-1]["seleccion"] = "PENDIENTE"
+
+        datos = self._informe_hu14(controles)
+
+        self.assertFalse(datos["COMPLETOS"])
+        self.assertEqual(
+            datos["MUESTRA"]["ESTADO"],
+            "Pendiente de análisis",
+        )
+
+    def test_informe_invalido_no_guarda_parcialmente(self):
+        controles = self._controles_hu14()
+        invalidos = (
+            controles[:-1],
+            controles + [controles[0]],
+            controles + [
+                {"analisis_id": 999, "seleccion": "NEGATIVO"}
+            ],
+            controles[:-1] + [
+                {"analisis_id": 8, "seleccion": "OTRO"}
+            ],
+        )
+        antes = self._copia_hu14()
+
+        for informe in invalidos:
+            with self.subTest(informe=informe):
+                with self.assertRaises(ValueError):
+                    self._informe_hu14(informe)
+                self.assertEqual(self._copia_hu14(), antes)
+
+    def test_repetir_informe_sin_cambios_no_duplica_historial(self):
+        controles = self._controles_hu14()
+        self._informe_hu14(controles)
+        antes = self._copia_hu14()
+
+        self._informe_hu14(controles)
+
+        self.assertEqual(self._copia_hu14(), antes)
+
+    def test_corregir_informe_exige_motivo_y_versiona_solo_cambio(self):
+        controles = self._controles_hu14()
+        self._informe_hu14(controles)
+        controles[0]["seleccion"] = "POSITIVO"
+        antes = self._copia_hu14()
+
+        with self.assertRaises(ValueError):
+            self._informe_hu14(controles)
+
+        self.assertEqual(self._copia_hu14(), antes)
+
+        datos = self._informe_hu14(
+            controles, motivo="Corrección de digitación"
+        )
+        versiones = {
+            fila["ANALISIS_ID"]: fila["VERSION"]
+            for fila in datos["RESULTADOS"]
+        }
+
+        self.assertEqual(
+            versiones,
+            {1: 2, 2: 1, 5: 1, 6: 1, 7: 1, 8: 1},
+        )
+        self.assertEqual(
+            datos["MUESTRA"]["ESTADO_LABORATORIO"],
+            "Bloqueada",
+        )
+
+    def test_fallo_final_revierte_informe_donante_e_historiales(self):
+        controles = self._controles_hu14()
+        controles[0]["seleccion"] = "POSITIVO"
+
+        self.ejecutar(
+            """CREATE TRIGGER fallo_hu14
+               BEFORE INSERT ON HISTORIAL_LIBERACION
+               BEGIN
+                   SELECT RAISE(ABORT, 'Fallo simulado');
+               END"""
+        )
+        antes = self._copia_hu14()
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self._informe_hu14(controles)
+
+        self.assertEqual(self._copia_hu14(), antes)
+
+    def test_positivo_individual_inhabilita_y_deja_trazabilidad(self):
+        from servicios.elegibilidad import buscar_candidatos
+
+        self._controles_hu14()
+        datos = self.guardar(
+            resultado="Positivo",
+            clasificacion="No conforme",
+        )
+
+        self.assertEqual(
+            self._filas_hu14(
+                "SELECT ELEGIBLE, INHABILITACION_FIN FROM DONANTES"
+            ),
+            [("Donante NO apto temporalmente", None)],
+        )
+
+        historial = self._filas_hu14(
+            "SELECT DONANTE_ID, MUESTRA_ID, RESULTADO_ID, "
+            "RESULTADO_VERSION, EMPLEADO_ID, MOTIVO "
+            "FROM HISTORIAL_HABILITACION"
+        )
+
+        self.assertEqual(len(historial), 1)
+        self.assertEqual(
+            historial[0][:5],
+            (
+                1,
+                self.muestra_id,
+                datos["RESULTADOS"][0]["ID"],
+                1,
+                1,
+            ),
+        )
+        self.assertIn("VIH_1_2", historial[0][5])
+
+        candidatos = buscar_candidatos(
+            "A", "+",
+            ruta=self.ruta,
+            hoy=self.ahora.date(),
+        )
+        self.assertEqual(candidatos, [])
+
+    def test_correccion_negativa_no_rehabilita_donante(self):
+        self._controles_hu14()
+        self.guardar(
+            resultado="Positivo",
+            clasificacion="No conforme",
+        )
+        self.guardar(
+            resultado="Negativo",
+            clasificacion="Conforme",
+            motivo_cambio="Corrección revisada",
+        )
+
+        self.assertEqual(
+            self._filas_hu14("SELECT ELEGIBLE FROM DONANTES"),
+            [("Donante NO apto temporalmente",)],
+        )
+
+    def test_positivo_conserva_inhabilitacion_permanente(self):
+        self._controles_hu14()
+        self.ejecutar(
+            "UPDATE DONANTES "
+            "SET ELEGIBLE='Donante NO apto PERMANENTEMENTE'"
+        )
+        self.guardar(
+            resultado="Positivo",
+            clasificacion="No conforme",
+        )
+
+        self.assertEqual(
+            self._filas_hu14("SELECT ELEGIBLE FROM DONANTES"),
+            [("Donante NO apto PERMANENTEMENTE",)],
+        )
+
+    def test_positivo_impide_fin_automatico_de_restriccion(self):
+        self._controles_hu14()
+        self.ejecutar(
+            "UPDATE DONANTES "
+            "SET ELEGIBLE='Donante NO apto temporalmente', "
+            "INHABILITACION_INICIO='2026-11-01', "
+            "INHABILITACION_FIN='2026-12-01'"
+        )
+        self.guardar(
+            resultado="Positivo",
+            clasificacion="No conforme",
+        )
+
+        self.assertEqual(
+            self._filas_hu14(
+                "SELECT INHABILITACION_INICIO, INHABILITACION_FIN "
+                "FROM DONANTES"
+            ),
+            [("2026-11-01", None)],
+        )
+
+    def test_entrevistador_no_guarda_informe_ni_inhabilita(self):
+        controles = self._controles_hu14()
+        controles[0]["seleccion"] = "POSITIVO"
+        antes = self._copia_hu14()
+
+        with self.assertRaises(PermissionError):
+            self._informe_hu14(controles, empleado=2)
+
+        self.assertEqual(self._copia_hu14(), antes)
+
+    def test_otra_muestra_negativa_no_rehabilita_donante(self):
+        controles = self._controles_hu14()
+        self.ejecutar(
+            """INSERT INTO DONACIONES (
+                   ID, DONANTE, TIPO_SANGRE, FACTOR_RH,
+                   FECHA_EXTRACCIÓN, FECHA_VENCIMIENTO,
+                   CANTIDAD, ESTADO
+               )
+               VALUES (
+                   2, 1, 'A', '+',
+                   '2026-11-20', '2026-12-10',
+                   450, 'Disponible'
+               )"""
+        )
+        otra = m.registrar_muestra(
+            2, 1, ruta=self.ruta, ahora=self.ahora
+        )
+
+        self.guardar(
+            resultado="Positivo",
+            clasificacion="No conforme",
+        )
+        r.guardar_informe(
+            otra["ID"],
+            controles,
+            1,
+            ruta=self.ruta,
+            ahora=self.ahora,
+        )
+
+        self.assertEqual(
+            self._filas_hu14("SELECT ELEGIBLE FROM DONANTES"),
+            [("Donante NO apto temporalmente",)],
+        )
 
 if __name__ == "__main__":
     unittest.main()

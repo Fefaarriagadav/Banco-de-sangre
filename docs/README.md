@@ -394,58 +394,91 @@ Otras bibliotecas utilizadas, como sqlite3, smtplib, email, os y pathlib, forman
 - *Vida útil de las unidades (VIDA_UTIL_DIAS):* actualmente es de 20 días, regla provisional heredada del proyecto. Podría ser de hasta 35 días; el equipo debe acordar y validar el valor definitivo.
 - *Reglas de donación:* confirmar con el equipo (y con la normativa aplicable) la espera por sexo (3 meses hombres, 4 meses mujeres), la cantidad máxima de 450 cc y el umbral de peso de 50 kg.
 
-### HU14-T1: Registro y consulta de muestras
+### HU14 — Control de muestras y resultados de laboratorio
 
-El rol Enfermero puede acceder a "Muestras de laboratorio"
-desde el menú lateral.
+El rol Enfermero accede desde «Muestras de laboratorio». Los permisos
+también se validan en los servicios.
 
-Permite registrar varias muestras por donación, cada una con ID único,
-fecha, hora y responsable. Al registrar una muestra, tanto esta como
-la unidad quedan en estado "Pendiente de análisis", y la unidad deja
-de contarse como disponible.
+#### Muestras y resultados
 
-Permite consultar por ID de muestra o ID de donación. Los permisos
-se validan también en el servicio.
+- Registro de varias muestras por donación existente, con ID único,
+  fecha, hora y responsable.
+- Listado de muestras y donaciones con filtros por identificador,
+  responsable, situación y grupo sanguíneo/Rh.
+- Al registrar una muestra, la unidad queda pendiente de análisis
+  y sale del stock disponible.
+- Los controles obligatorios son VIH 1/2, hepatitis B, hepatitis C,
+  HTLV I/II, Chagas y sífilis.
+- «Completar informe» permite registrar todos los controles juntos,
+  con selección exclusiva: Pendiente, Negativo o Positivo.
+- El formulario individual permite corregir un control puntual.
+  Las correcciones requieren motivo y conservan las versiones anteriores.
+- Las unidades vencidas y sus muestras se ocultan del listado operativo,
+  conservando sus datos e historial.
 
-El registro, el cambio de disponibilidad y el historial se guardan
-en una misma transacción. Si falla una escritura, se revierte todo.
+#### Liberación, bloqueo y stock
 
-No admite registrar muestras para unidades vencidas, usadas,
-descartadas, reservadas o bloqueadas.
+La evaluación considera todas las muestras de la donación:
 
-La migración crea MUESTRAS e HISTORIAL_MUESTRAS sin borrar datos.
-Los resultados y la liberación de unidades corresponden a T2 y T3.
+- Un resultado No conforme bloquea la unidad.
+- Los controles incompletos o un catálogo obligatorio vacío impiden liberarla.
+- Los controles completos y conformes requieren autorización explícita
+  de un Enfermero, indicando un motivo.
+- Una nueva muestra o modificación de resultados revoca la autorización
+  anterior y vuelve a evaluar la unidad.
+- La liberación no reactiva unidades vencidas, usadas, descartadas o reservadas.
 
-Validación: 16 pruebas nuevas; suites completas con 107 pruebas
-del Sprint 1 y 50 del Sprint 2 aprobadas.
+Stock muestra las unidades disponibles y las unidades en revisión
+en sectores separados. Las pendientes, bloqueadas o vencidas no se
+consideran disponibles para despacho.
 
-### HU14-T2: Registro y consulta de resultados
+Los controles de disponibilidad y laboratorio también se aplican
+a reservas, despachos y logística. Se conserva la trazabilidad
+de las evaluaciones y autorizaciones.
 
-Desde "Muestras de laboratorio", un Enfermero puede consultar una muestra,
-seleccionar su fila y abrir "Resultados de la muestra".
+#### Inhabilitación del donante
 
-Permite registrar:
-- Análisis seleccionado desde un catálogo configurable.
-- Resultado informado por laboratorio.
-- Clasificación: Pendiente, Conforme o No conforme.
-- Observaciones, fecha y responsable.
+Un resultado No conforme en los controles de tamizaje configurados
+inhabilita temporalmente al donante, sin fecha de término y pendiente
+de revisión. Una inhabilitación permanente existente se conserva.
 
-Para corregir un resultado existente se exige un motivo.
-Cada modificación genera una nueva versión y conserva las anteriores
-en el historial.
+Un negativo posterior, incluso en otra muestra, no rehabilita
+automáticamente al donante: requiere revisión y habilitación manual
+por personal autorizado.
 
-Los resultados parciales mantienen la muestra Pendiente de análisis.
-Al completar los controles obligatorios pasa a Pendiente de revisión.
-Esto no significa que todos los resultados sean conformes ni libera
-la unidad: esta permanece fuera del stock disponible.
+El historial identifica responsable, fecha, motivo, muestra,
+resultado y versión. La automatización se aplica al guardar resultados
+nuevos o nuevas versiones; no procesa resultados anteriores retrospectivamente.
 
-El catálogo habitual se crea vacío. Sin controles obligatorios configurados,
-los análisis no se consideran completos. Los controles y las reglas clínicas
-deben validarse con el Product Owner.
+El sistema registra resultados informados; no realiza análisis físicos
+ni emite diagnósticos médicos. Un tamizaje positivo no constituye
+por sí solo un diagnóstico confirmado.
 
-El bloqueo automático y la autorización de liberación corresponden a T3.
+#### Configuración y ejecución
 
-#### Demo de HU14
+Con la aplicación cerrada y BancoDeSangre.db respaldada,
+ejecutar desde la raíz del proyecto:
+
+```powershell
+python scripts/configurar_catalogo_hu14.py
+```
+
+Este script aplica las migraciones y configura los controles obligatorios
+sin crear resultados ni autorizaciones. Puede repetirse sin duplicarlos.
+Si existen autorizaciones incompatibles con nuevos requisitos,
+detiene la carga del catálogo para que sean revisadas.
+
+Para abrir la base normal:
+
+```powershell
+Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
+python pantalla.py
+```
+
+No requiere dependencias adicionales a requirements.txt.
+Las bases y respaldos locales no deben incluirse en los commits.
+
+#### Demo opcional
 
 ```powershell
 python scripts/crear_demo_hu14.py
@@ -453,140 +486,23 @@ $env:BANCO_SANGRE_BD = Join-Path $PWD "BancoDeSangre_HU14_demo.db"
 python pantalla.py
 ```
 
-Iniciar sesión con ID 1. La demo contiene la donación 1, una muestra
-y dos controles ficticios obligatorios, sin validez clínica.
-El generador no sobrescribe una demo existente.
+El generador imprime los accesos y escenarios disponibles.
+No sobrescribe una demo existente. Sus resultados son ficticios
+y no tienen validez clínica.
 
-Para volver a la base habitual, cerrar la aplicación y ejecutar:
+#### Pruebas
 
-```powershell
-Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
-python pantalla.py
-```
+- Sprint 1: 110 pruebas.
+- Sprint 2: 121 pruebas.
+- test_resultados_analisis.py: 30 pruebas, incluidas en el Sprint 2.
 
-#### Validación
-
-18 pruebas nuevas de T2. Suites completas:
-107 pruebas del Sprint 1 y 68 del Sprint 2 aprobadas.
-
-Se verificaron permisos, resultados parciales, versiones, motivos de
-corrección, transacciones y conservación de la exclusión del stock.
-
-### HU14-T3: Evaluación, liberación y bloqueo de unidades
-
-El módulo de laboratorio muestra todas las muestras y donaciones,
-con filtros por identificador/responsable, situación y grupo/Rh.
-Permite abrir resultados y registrar nuevas muestras desde una fila.
-
-La evaluación considera todas las muestras de la donación:
-- Un resultado No conforme bloquea automáticamente la unidad.
-- Los controles incompletos o un catálogo obligatorio vacío impiden liberarla.
-- Los controles completos y conformes requieren autorización explícita
-  de un Enfermero, indicando un motivo.
-- Registrar otra muestra o actualizar resultados revoca la autorización
-  anterior y vuelve a evaluar la unidad.
-
-ESTADO_LABORATORIO se mantiene separado del estado de inventario.
-La liberación no reactiva unidades vencidas, usadas, descartadas o reservadas.
-
-Stock, sobreabastecimiento y selección para despachos exigen unidades
-disponibles, vigentes y liberadas por laboratorio. También se comprueba
-la autorización al aprobar reservas, generar hojas de ruta y notificar
-a logística. Cancelar o redirigir una solicitud no devuelve unidades
-pendientes o bloqueadas al stock disponible.
-
-El historial conserva responsable, fecha, motivo, muestras y versiones
-de resultados utilizadas. Se distingue la evaluación automática de
-la autorización expresa del personal.
-
-Las donaciones anteriores quedan sin autorización de laboratorio:
-la migración no las aprueba automáticamente.
-
-La demo incluye ocho escenarios: sin muestras, sin resultados,
-resultados parciales, conformes sin autorización, bloqueo,
-liberación, revocación por nueva muestra y vencimiento.
-
-Los controles de demostración son ficticios y no tienen validez clínica.
-El catálogo obligatorio y sus reglas requieren validación del PO.
-
-### HU14 — Control de muestras y resultados de laboratorio
-
-- Registro y consulta de muestras asociadas a donaciones existentes.
-- Identificación de muestra, donación, responsable y fecha de registro.
-- Catálogo de controles obligatorios: VIH 1/2, hepatitis B,
-  hepatitis C, HTLV I/II, Chagas y sífilis.
-- Formulario «Completar informe» para registrar todos los controles
-  juntos con selección exclusiva: Pendiente, Negativo o Positivo.
-- Guardado del informe en una transacción: si falla un control,
-  se revierten todos los cambios de esa operación.
-- Registro individual para corregir un control puntual.
-- Correcciones con motivo e historial de versiones, fecha y responsable.
-- Bloqueo por resultados no conformes y autorización explícita
-  de liberación cuando se cumplen los requisitos.
-- Integración con stock: unidades pendientes, bloqueadas o vencidas
-  no se consideran disponibles para despacho.
-
-El sistema registra resultados informados; no realiza análisis físicos
-ni emite diagnósticos médicos.
-
-#### Configuración de una base existente
-
-Con la aplicación cerrada, respaldar BancoDeSangre.db y ejecutar
-desde la raíz del proyecto:
-
-```powershell
-python scripts/configurar_catalogo_hu14.py
-```
-
-El script configura los controles obligatorios sin crear resultados
-ni autorizaciones. Puede repetirse sin duplicar los controles.
-Si detecta autorizaciones existentes que requieren revisión antes
-de cambiar los requisitos, detiene la carga del catálogo.
-
-Para abrir la aplicación con la base normal:
-
-```powershell
-Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
-python pantalla.py
-```
-
-No se agregan dependencias externas nuevas para estos cambios.
-Las bases y respaldos locales no deben incluirse en el commit.
-
-#### Validación
-
-Última ejecución local: 110 pruebas del Sprint 1 y 109 del Sprint 2,
-todas correctas. Queda pendiente incorporar al repositorio las pruebas
-específicas del guardado conjunto.
+La cobertura incluye permisos, informes completos y parciales,
+correcciones, versiones, inhabilitación y conservación de restricciones.
+También comprueba que un fallo revierta el informe, la modificación
+del donante y sus historiales dentro de la misma transacción.
 
 ```powershell
 python -m unittest discover -s "tests/Sprint 1" -v
 python -m unittest discover -s "tests/Sprint 2" -v
 git diff --check
 ```
-
-#### Ajustes posteriores a la revisión con el PO
-
-- Botón «Guardar informe» ubicado a la derecha.
-- Pantalla de stock con disponibles a la izquierda y unidades
-  en revisión a la derecha, sin mezclarlas con el stock disponible.
-- Exclusión de unidades vencidas y sus muestras del listado
-  operativo de laboratorio, conservando sus datos e historial.
-- Inhabilitación temporal automática del donante al guardar
-  un resultado No conforme en los controles de tamizaje configurados.
-- La restricción queda sin fecha de término, pendiente de revisión.
-  Se conserva cualquier inhabilitación permanente existente.
-- Un resultado negativo posterior no rehabilita automáticamente
-  al donante: requiere revisión y habilitación manual autorizada.
-- El historial identifica responsable, motivo, muestra,
-  resultado y versión que originaron la restricción.
-- Resultado, inhabilitación e historiales se guardan dentro
-  de la misma transacción.
-
-Al incorporar estos cambios, con la aplicación cerrada y la base
-respaldada, ejecutar una vez para actualizar su estructura:
-
-python -c "from datos.basededatos import inicializar_base; inicializar_base()"
-
-La inhabilitación automática se aplica al guardar resultados nuevos
-o nuevas versiones; no procesa retrospectivamente resultados anteriores.
