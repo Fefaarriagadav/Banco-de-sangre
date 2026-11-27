@@ -1,3 +1,4 @@
+from contextlib import closing
 import unittest
 import sqlite3
 import tempfile
@@ -15,7 +16,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             Path(self.temporal.name) / "test_aprobacion.db"
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             conexion.executescript("""
                 PRAGMA foreign_keys = ON;
@@ -95,6 +96,14 @@ class TestAprobacionDespachos(unittest.TestCase):
                     ESTADO TEXT
                 );
             """)
+            # Reserva ficticia inicialmente aprobada por laboratorio.
+            conexion.execute(
+                """
+                ALTER TABLE DONACIONES
+                ADD COLUMN ESTADO_LABORATORIO TEXT NOT NULL
+                DEFAULT 'Liberada'
+                """
+            )
 
     # TEST 1: Aprobar una emergencia
     def test_aprobar_emergencia(self):
@@ -106,7 +115,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO
@@ -134,7 +143,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO, MOTIVO_RECHAZO
@@ -172,7 +181,7 @@ class TestAprobacionDespachos(unittest.TestCase):
             )
 
         # Verificar que la solicitud siga pendiente
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             estado = conexion.execute("""
                 SELECT ESTADO
@@ -185,6 +194,133 @@ class TestAprobacionDespachos(unittest.TestCase):
             "Pendiente de aprobación"
         )
 
+    def test_no_aprueba_reserva_sin_liberacion_laboratorio(self):
+        for laboratorio in (
+            "Pendiente de análisis",
+            "Bloqueada",
+        ):
+            with self.subTest(laboratorio=laboratorio):
+                with closing(
+                    sqlite3.connect(self.ruta)
+                ) as conexion, conexion:
+                    conexion.execute(
+                        """
+                        UPDATE DONACIONES
+                        SET ESTADO_LABORATORIO = ?
+                        WHERE ID = 1
+                        """,
+                        (laboratorio,),
+                    )
+                    estado_anterior = conexion.execute(
+                        """
+                        SELECT ESTADO
+                        FROM DESPACHOS_EMERGENCIA
+                        WHERE ID = 1
+                        """
+                    ).fetchone()[0]
+
+                with self.assertRaisesRegex(
+                    ValueError, "liberación de laboratorio"
+                ):
+                    aprobar_solicitud(
+                        "Emergencia",
+                        1,
+                        100001,
+                        ruta=self.ruta,
+                    )
+
+                with closing(
+                    sqlite3.connect(self.ruta)
+                ) as conexion:
+                    estado_actual = conexion.execute(
+                        """
+                        SELECT ESTADO
+                        FROM DESPACHOS_EMERGENCIA
+                        WHERE ID = 1
+                        """
+                    ).fetchone()[0]
+
+                self.assertEqual(
+                    estado_actual,
+                    estado_anterior,
+                )
+
+    def test_rechazo_no_reactiva_unidad_pendiente_laboratorio(self):
+        with closing(
+            sqlite3.connect(self.ruta)
+        ) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO_LABORATORIO = 'Pendiente de análisis'
+                WHERE ID = 1
+                """
+            )
+
+        rechazar_solicitud(
+            "Emergencia",
+            1,
+            100001,
+            "Cancelación ficticia",
+            ruta=self.ruta,
+        )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            unidad = conexion.execute(
+                """
+                SELECT ESTADO, ESTADO_LABORATORIO
+                FROM DONACIONES
+                WHERE ID = 1
+                """
+            ).fetchone()
+
+            reservas = conexion.execute(
+                """
+                SELECT COUNT(*)
+                FROM RESERVAS_EMERGENCIA
+                WHERE SOLICITUD_ID = 1
+                """
+            ).fetchone()[0]
+
+        self.assertEqual(
+            unidad,
+            ("Pendiente de análisis", "Pendiente de análisis"),
+        )
+        self.assertEqual(reservas, 0)
+
+    def test_rechazo_no_reactiva_unidad_bloqueada_laboratorio(self):
+        with closing(
+            sqlite3.connect(self.ruta)
+        ) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO_LABORATORIO = 'Bloqueada'
+                WHERE ID = 1
+                """
+            )
+
+        rechazar_solicitud(
+            "Emergencia",
+            1,
+            100001,
+            "Cancelación ficticia",
+            ruta=self.ruta,
+        )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            unidad = conexion.execute(
+                """
+                SELECT ESTADO, ESTADO_LABORATORIO
+                FROM DONACIONES
+                WHERE ID = 1
+                """
+            ).fetchone()
+
+        self.assertEqual(
+            unidad,
+            ("Bloqueada", "Bloqueada"),
+        )
 
 if __name__ == "__main__":
     unittest.main()

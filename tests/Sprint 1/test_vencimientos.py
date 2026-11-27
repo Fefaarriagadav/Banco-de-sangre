@@ -29,7 +29,32 @@ class VencimientosTest(unittest.TestCase):
         estado=v.DISPONIBLE,
         extraccion="2026-11-01",
         cantidad=450,
+        estado_laboratorio="Liberada",
     ):
+        # Estas pruebas aíslan vencimientos y cantidades.
+        # Sus unidades ficticias parten aprobadas por laboratorio.
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            cursor = conexion.execute(
+                """
+                INSERT INTO DONACIONES (
+                    FECHA_EXTRACCIÓN,
+                    FECHA_VENCIMIENTO,
+                    CANTIDAD,
+                    ESTADO,
+                    ESTADO_LABORATORIO
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    extraccion,
+                    vencimiento,
+                    cantidad,
+                    estado,
+                    estado_laboratorio,
+                ),
+            )
+            return cursor.lastrowid
+
         with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
             cursor = conexion.execute(
                 """

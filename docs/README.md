@@ -393,3 +393,116 @@ Otras bibliotecas utilizadas, como sqlite3, smtplib, email, os y pathlib, forman
 
 - *Vida útil de las unidades (VIDA_UTIL_DIAS):* actualmente es de 20 días, regla provisional heredada del proyecto. Podría ser de hasta 35 días; el equipo debe acordar y validar el valor definitivo.
 - *Reglas de donación:* confirmar con el equipo (y con la normativa aplicable) la espera por sexo (3 meses hombres, 4 meses mujeres), la cantidad máxima de 450 cc y el umbral de peso de 50 kg.
+
+### HU14 — Control de muestras y resultados de laboratorio
+
+El rol Enfermero accede desde «Muestras de laboratorio». Los permisos
+también se validan en los servicios.
+
+#### Muestras y resultados
+
+- Registro de varias muestras por donación existente, con ID único,
+  fecha, hora y responsable.
+- Listado de muestras y donaciones con filtros por identificador,
+  responsable, situación y grupo sanguíneo/Rh.
+- Al registrar una muestra, la unidad queda pendiente de análisis
+  y sale del stock disponible.
+- Los controles obligatorios son VIH 1/2, hepatitis B, hepatitis C,
+  HTLV I/II, Chagas y sífilis.
+- «Completar informe» permite registrar todos los controles juntos,
+  con selección exclusiva: Pendiente, Negativo o Positivo.
+- El formulario individual permite corregir un control puntual.
+  Las correcciones requieren motivo y conservan las versiones anteriores.
+- Las unidades vencidas y sus muestras se ocultan del listado operativo,
+  conservando sus datos e historial.
+
+#### Liberación, bloqueo y stock
+
+La evaluación considera todas las muestras de la donación:
+
+- Un resultado No conforme bloquea la unidad.
+- Los controles incompletos o un catálogo obligatorio vacío impiden liberarla.
+- Los controles completos y conformes requieren autorización explícita
+  de un Enfermero, indicando un motivo.
+- Una nueva muestra o modificación de resultados revoca la autorización
+  anterior y vuelve a evaluar la unidad.
+- La liberación no reactiva unidades vencidas, usadas, descartadas o reservadas.
+
+Stock muestra las unidades disponibles y las unidades en revisión
+en sectores separados. Las pendientes, bloqueadas o vencidas no se
+consideran disponibles para despacho.
+
+Los controles de disponibilidad y laboratorio también se aplican
+a reservas, despachos y logística. Se conserva la trazabilidad
+de las evaluaciones y autorizaciones.
+
+#### Inhabilitación del donante
+
+Un resultado No conforme en los controles de tamizaje configurados
+inhabilita temporalmente al donante, sin fecha de término y pendiente
+de revisión. Una inhabilitación permanente existente se conserva.
+
+Un negativo posterior, incluso en otra muestra, no rehabilita
+automáticamente al donante: requiere revisión y habilitación manual
+por personal autorizado.
+
+El historial identifica responsable, fecha, motivo, muestra,
+resultado y versión. La automatización se aplica al guardar resultados
+nuevos o nuevas versiones; no procesa resultados anteriores retrospectivamente.
+
+El sistema registra resultados informados; no realiza análisis físicos
+ni emite diagnósticos médicos. Un tamizaje positivo no constituye
+por sí solo un diagnóstico confirmado.
+
+#### Configuración y ejecución
+
+Con la aplicación cerrada y BancoDeSangre.db respaldada,
+ejecutar desde la raíz del proyecto:
+
+```powershell
+python scripts/configurar_catalogo_hu14.py
+```
+
+Este script aplica las migraciones y configura los controles obligatorios
+sin crear resultados ni autorizaciones. Puede repetirse sin duplicarlos.
+Si existen autorizaciones incompatibles con nuevos requisitos,
+detiene la carga del catálogo para que sean revisadas.
+
+Para abrir la base normal:
+
+```powershell
+Remove-Item Env:BANCO_SANGRE_BD -ErrorAction SilentlyContinue
+python pantalla.py
+```
+
+No requiere dependencias adicionales a requirements.txt.
+Las bases y respaldos locales no deben incluirse en los commits.
+
+#### Demo opcional
+
+```powershell
+python scripts/crear_demo_hu14.py
+$env:BANCO_SANGRE_BD = Join-Path $PWD "BancoDeSangre_HU14_demo.db"
+python pantalla.py
+```
+
+El generador imprime los accesos y escenarios disponibles.
+No sobrescribe una demo existente. Sus resultados son ficticios
+y no tienen validez clínica.
+
+#### Pruebas
+
+- Sprint 1: 110 pruebas.
+- Sprint 2: 121 pruebas.
+- test_resultados_analisis.py: 30 pruebas, incluidas en el Sprint 2.
+
+La cobertura incluye permisos, informes completos y parciales,
+correcciones, versiones, inhabilitación y conservación de restricciones.
+También comprueba que un fallo revierta el informe, la modificación
+del donante y sus historiales dentro de la misma transacción.
+
+```powershell
+python -m unittest discover -s "tests/Sprint 1" -v
+python -m unittest discover -s "tests/Sprint 2" -v
+git diff --check
+```

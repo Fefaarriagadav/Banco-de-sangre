@@ -1,4 +1,4 @@
-
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -18,7 +18,7 @@ class TestReservaEmergencia(unittest.TestCase):
             Path(temporal.name) / "pruebas_emergencia.db"
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
             conexion.executescript("""
                 PRAGMA foreign_keys = ON;
 
@@ -52,6 +52,14 @@ class TestReservaEmergencia(unittest.TestCase):
                 (2, NULL, 'A', '+', 450, 'Disponible', '2099-01-01'),
                 (3, NULL, 'A', '+', 450, 'Disponible', '2099-01-01');
             """)
+            # Solo para esta base temporal: unidades ya aprobadas.
+            conexion.execute(
+                """
+                ALTER TABLE DONACIONES
+                ADD COLUMN ESTADO_LABORATORIO TEXT NOT NULL
+                DEFAULT 'Liberada'
+                """
+            )
 
     def test_reserva_bolsas_completas(self):
         solicitud = registrar_emergencia(
@@ -59,7 +67,7 @@ class TestReservaEmergencia(unittest.TestCase):
             900, "Urgencia médica", ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
             reservas = conexion.execute("""
                 SELECT COUNT(*), SUM(VOLUMEN_ML)
                 FROM RESERVAS_EMERGENCIA
@@ -87,7 +95,7 @@ class TestReservaEmergencia(unittest.TestCase):
                 900, "Segunda emergencia", ruta=self.ruta
             )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
             cantidad = conexion.execute("""
                 SELECT COUNT(*)
                 FROM DESPACHOS_EMERGENCIA

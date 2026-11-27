@@ -1,9 +1,13 @@
 import sqlite3
+from servicios.liberacion import migrar_liberacion
+from servicios.muestras import migrar_muestras
 from datos.configuracion import RUTA_BD
 from servicios.despachos import migrar_despachos
 from servicios.rutas_logisticas import migrar_rutas_logisticas
 from servicios.vencimientos import migrar
 from servicios.redireccion_emergencias import migrar_redirecciones
+from servicios.muestras import migrar_muestras
+from servicios.resultados_analisis import migrar_resultados
 
 def inicializar_base(ruta=RUTA_BD):
     conexion = sqlite3.connect(ruta) # conecta con la base de datos "bancoDeSangre" (si no existe, la crea)
@@ -68,6 +72,36 @@ def inicializar_base(ruta=RUTA_BD):
     migrar_despachos(conexion)
     migrar_rutas_logisticas(conexion)
     migrar_redirecciones(conexion)
-    
+    migrar_muestras(conexion)
+    migrar_resultados(conexion)
+    migrar_liberacion(conexion)
+    columnas_historial = {
+        fila[1]
+        for fila in conexion.execute(
+            "PRAGMA table_info(HISTORIAL_HABILITACION)"
+        )
+    }
+
+    campos_laboratorio = (
+        ("MOTIVO", "TEXT NOT NULL DEFAULT ''"),
+        (
+            "MUESTRA_ID",
+            "INTEGER REFERENCES MUESTRAS(ID)",
+        ),
+        (
+            "RESULTADO_ID",
+            "INTEGER REFERENCES RESULTADOS_ANALISIS(ID)",
+        ),
+        ("RESULTADO_VERSION", "INTEGER"),
+    )
+
+    for nombre, definicion in campos_laboratorio:
+        if nombre not in columnas_historial:
+            conexion.execute(
+                f"ALTER TABLE HISTORIAL_HABILITACION "
+                f"ADD COLUMN {nombre} {definicion}"
+            )
+
+
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos

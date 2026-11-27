@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -11,14 +12,16 @@ class BaseTemporal(unittest.TestCase):
         temporal = tempfile.TemporaryDirectory()
         self.addCleanup(temporal.cleanup)
         self.ruta = Path(temporal.name) / 'alertas_prueba.db'
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.executescript("""
                 CREATE TABLE DONACIONES (
                     ID INTEGER PRIMARY KEY AUTOINCREMENT,
                     TIPO_SANGRE TEXT,
                     FACTOR_RH TEXT,
                     ESTADO TEXT,
-                    FECHA_VENCIMIENTO TEXT
+                    FECHA_VENCIMIENTO TEXT,
+                    ESTADO_LABORATORIO TEXT NOT NULL
+                        DEFAULT 'Pendiente de análisis'
                 );
                 CREATE TABLE UMBRALES (
                     GRUPO_SANGUINEO TEXT,
@@ -40,15 +43,40 @@ class BaseTemporal(unittest.TestCase):
         self.parche_ruta.start()
         self.addCleanup(self.parche_ruta.stop)
 
-    def bolsas(self, grupo='A', rh='+', cantidad=1, estado='Disponible'):
-        with sqlite3.connect(self.ruta) as bd:
+    def bolsas(
+        self,
+        grupo="A",
+        rh="+",
+        cantidad=1,
+        estado="Disponible",
+        laboratorio="Liberada",
+        vencimiento="2099-01-01",
+    ):
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.executemany(
-                'INSERT INTO DONACIONES (TIPO_SANGRE, FACTOR_RH, ESTADO) VALUES (?, ?, ?)',
-                [(grupo, rh, estado)] * cantidad,
+                """
+                INSERT INTO DONACIONES (
+                    TIPO_SANGRE,
+                    FACTOR_RH,
+                    ESTADO,
+                    ESTADO_LABORATORIO,
+                    FECHA_VENCIMIENTO
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        grupo,
+                        rh,
+                        estado,
+                        laboratorio,
+                        vencimiento,
+                    )
+                ] * cantidad,
             )
 
     def hospital(self, nombre, grupo='A', rh='+', cantidad=3, direccion='Concepción'):
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.execute(
                 'INSERT INTO HOSPITALES VALUES (?, ?, ?, ?, ?)',
                 (nombre, direccion, grupo, rh, cantidad),
@@ -91,7 +119,7 @@ class AlertasStockTest(BaseTemporal):
         self.assertEqual(servicio.obtener_alertas_sobreabastecimiento()[0]['excedente'], 1)
 
     def test_umbrales_invalidos_se_omiten(self):
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.execute("UPDATE UMBRALES SET UMBRAL_MAXIMO=-1 WHERE GRUPO_SANGUINEO='A'")
             bd.execute("UPDATE UMBRALES SET UMBRAL_MAXIMO=NULL WHERE GRUPO_SANGUINEO='O'")
         self.bolsas('A', '+', 8)
@@ -99,10 +127,44 @@ class AlertasStockTest(BaseTemporal):
         self.assertEqual(servicio.obtener_alertas_sobreabastecimiento(), [])
 
     def test_error_sql_se_traduce_a_valueerror(self):
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.execute('DROP TABLE UMBRALES')
         with self.assertRaisesRegex(ValueError, 'base de datos'):
             servicio.obtener_alertas_sobreabastecimiento()
+    def test_no_cuenta_unidades_pendientes_de_laboratorio(self):
+        self.bolsas(
+            cantidad=6,
+            laboratorio="Pendiente de análisis",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
+
+    def test_no_cuenta_unidades_bloqueadas_por_laboratorio(self):
+        self.bolsas(
+            cantidad=6,
+            estado="Disponible",
+            laboratorio="Bloqueada",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
+
+    def test_liberacion_no_permite_contar_unidades_vencidas(self):
+        self.bolsas(
+            cantidad=6,
+            laboratorio="Liberada",
+            vencimiento="2000-01-01",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
 
 class SugerenciasTest(BaseTemporal):
     def test_sin_hospitales_no_hay_sugerencias(self):
@@ -128,15 +190,15 @@ class SugerenciasTest(BaseTemporal):
     def test_consulta_no_modifica_inventario(self):
         self.bolsas(cantidad=6)
         self.hospital('Hospital 1', cantidad=3)
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             antes = bd.execute('SELECT COUNT(*) FROM DONACIONES').fetchone()[0]
         servicio.sugerir_redistribucion('A', '+')
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             despues = bd.execute('SELECT COUNT(*) FROM DONACIONES').fetchone()[0]
         self.assertEqual(antes, despues)
 
     def test_error_sql_se_traduce_a_valueerror(self):
-        with sqlite3.connect(self.ruta) as bd:
+        with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.execute('DROP TABLE HOSPITALES')
         with self.assertRaisesRegex(ValueError, 'destino'):
             servicio.sugerir_redistribucion('A', '+')

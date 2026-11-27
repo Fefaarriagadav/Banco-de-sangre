@@ -1,3 +1,4 @@
+from contextlib import closing
 import unittest
 import sqlite3
 import tempfile
@@ -14,7 +15,7 @@ class TestDespachoEmergencia(unittest.TestCase):
             Path(self.temporal.name) / "test_emergencia.db"
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             conexion.executescript("""
                 CREATE TABLE CENTROS_MEDICOS (
@@ -50,6 +51,14 @@ class TestDespachoEmergencia(unittest.TestCase):
                 (2, NULL, 'A', '+', 450, 'Disponible', '2099-01-01'),
                 (3, NULL, 'A', '+', 450, 'Disponible', '2099-01-01');
             """)
+            # Solo para esta base temporal: unidades ya aprobadas.
+            conexion.execute(
+                """
+                ALTER TABLE DONACIONES
+                ADD COLUMN ESTADO_LABORATORIO TEXT NOT NULL
+                DEFAULT 'Liberada'
+                """
+            )
 
             # Crear las tablas de emergencia
             crear_tabla_emergencias(conexion)
@@ -67,7 +76,7 @@ class TestDespachoEmergencia(unittest.TestCase):
             ruta=self.ruta
         )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitud = conexion.execute("""
                 SELECT
@@ -121,7 +130,7 @@ class TestDespachoEmergencia(unittest.TestCase):
                 ruta=self.ruta
             )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitudes = conexion.execute("""
                 SELECT COUNT(*)
@@ -150,7 +159,7 @@ class TestDespachoEmergencia(unittest.TestCase):
                 ruta=self.ruta
             )
 
-        with sqlite3.connect(self.ruta) as conexion:
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
 
             solicitudes = conexion.execute("""
                 SELECT COUNT(*)

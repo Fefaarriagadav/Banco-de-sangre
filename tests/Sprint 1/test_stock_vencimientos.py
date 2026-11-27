@@ -50,8 +50,19 @@ class ControlFalso:
         self.filas = [(ident, v) for ident, v in self.filas if ident is not identificador]
 
 class EstiloFalso:
-    def __init__(self, *args, **kwargs): pass
-    def configure(self, *args, **kwargs): pass
+    def __init__(self, *args, **kwargs):
+        self.tema = "default"
+
+    def configure(self, *args, **kwargs):
+        pass
+
+    def theme_use(self, nombre=None):
+        if nombre is not None:
+            self.tema = nombre
+        return self.tema
+
+    def map(self, *args, **kwargs):
+        pass
 
 class PantallasStockVencimientosTest(unittest.TestCase):
     def setUp(self):
@@ -100,7 +111,7 @@ class PantallasStockVencimientosTest(unittest.TestCase):
             stocks.mostrar_stocks(self.raiz)
         consulta.assert_called_once()
         tablas = [c for c in ControlFalso.creados if 'columns' in c.opciones]
-        self.assertEqual(len(tablas), 2)
+        self.assertEqual(len(tablas), 3)
         self.assertEqual(len(tablas[0].filas), 2)
         self.assertEqual(len(tablas[1].filas), 3)
         self.assertEqual(tablas[0].filas[0][1], ('A', '+', 2, '0.75', '15-11-2026'))
@@ -114,7 +125,10 @@ class PantallasStockVencimientosTest(unittest.TestCase):
             self.boton('Actualizar ahora')()
         self.assertEqual(consulta.call_count, 2)
         tablas = [c for c in ControlFalso.creados if 'columns' in c.opciones]
-        self.assertEqual([len(t.filas) for t in tablas], [0, 0])
+        self.assertEqual(
+            [len(t.filas) for t in tablas],
+            [0, 0, 0],
+        )
         self.assertTrue(self.texto_contiene('Total disponible: 0 unidades · 0.00 litros'))
 
     def test_stocks_error_de_consulta_informa_y_vacia_tablas(self):
@@ -123,7 +137,10 @@ class PantallasStockVencimientosTest(unittest.TestCase):
             stocks.mostrar_stocks(self.raiz)
             self.boton('Actualizar ahora')()
         tablas = [c for c in ControlFalso.creados if 'columns' in c.opciones]
-        self.assertEqual([len(t.filas) for t in tablas], [0, 0])
+        self.assertEqual(
+            [len(t.filas) for t in tablas],
+            [0, 0, 0],
+        )
         self.assertTrue(self.texto_contiene('Stock no disponible'))
         self.assertTrue(self.texto_contiene('Se reintentará automáticamente'))
 

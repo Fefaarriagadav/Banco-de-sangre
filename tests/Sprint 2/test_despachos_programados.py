@@ -39,11 +39,17 @@ class DespachosProgramadosTest(unittest.TestCase):
         # Bolsa AB- disponible durante la fecha simulada de los tests.
         # Todas las solicitudes programadas usan mL, no número de bolsas.
         with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            # Unidad ficticia previamente liberada por laboratorio.
             conexion.execute("""
                 INSERT INTO DONACIONES (
                     TIPO_SANGRE, FACTOR_RH, FECHA_EXTRACCIÓN,
-                    FECHA_VENCIMIENTO, CANTIDAD, ESTADO
-                ) VALUES ('AB', '-', '2026-11-15', '2026-11-30', 450, 'Disponible')
+                    FECHA_VENCIMIENTO, CANTIDAD, ESTADO,
+                    ESTADO_LABORATORIO
+                )
+                VALUES (
+                    'AB', '-', '2026-11-15', '2026-11-30',
+                    450, 'Disponible', 'Liberada'
+                )
             """)
         self.ahora = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
         self.datos = {

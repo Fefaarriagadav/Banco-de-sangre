@@ -88,6 +88,23 @@ def migrar_redirecciones(conexion):
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (centro, grupo, rh, vol, prio, ahora))
 
+def _volumen_reservado_apto(conexion, orden_id, hoy):
+    fila = conexion.execute(
+        """
+        SELECT COALESCE(SUM(r.VOLUMEN_ML), 0)
+        FROM RESERVAS_EMERGENCIA AS r
+        JOIN DONACIONES AS d ON d.ID = r.DONACION_ID
+        WHERE r.SOLICITUD_ID = ?
+          AND d.ESTADO = 'Reservada'
+          AND d.ESTADO_LABORATORIO = 'Liberada'
+          AND d.FECHA_VENCIMIENTO >= ?
+          AND r.VOLUMEN_ML = d.CANTIDAD
+          AND r.VOLUMEN_ML > 0
+        """,
+        (orden_id, hoy.isoformat()),
+    ).fetchone()
+
+    return int(fila[0])
 
 def evaluar_deficit_y_seleccionar_centro(
     orden_id,
@@ -127,11 +144,9 @@ def evaluar_deficit_y_seleccionar_centro(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='RESERVAS_EMERGENCIA'"
         ).fetchone()
         if tiene_reservas:
-            fila_res = conexion.execute(
-                "SELECT COALESCE(SUM(VOLUMEN_ML), 0) FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?",
-                (orden_id,),
-            ).fetchone()
-            reservado_orden_ml = int(fila_res[0])
+            reservado_orden_ml = _volumen_reservado_apto(
+                conexion, orden_id, hoy
+            )
 
         cobertura_propia_ml = disponible_propio_ml + reservado_orden_ml
 
@@ -265,11 +280,8 @@ def ejecutar_redireccion_emergencia(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='RESERVAS_EMERGENCIA'"
             ).fetchone()
             if tiene_reservas:
-                reservado_orden_ml = int(
-                    conexion.execute(
-                        "SELECT COALESCE(SUM(VOLUMEN_ML), 0) FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?",
-                        (orden_id,),
-                    ).fetchone()[0]
+                reservado_orden_ml = _volumen_reservado_apto(
+                    conexion, orden_id, hoy
                 )
 
             cobertura_propia_ml = disponible_propio_ml + reservado_orden_ml
@@ -280,17 +292,33 @@ def ejecutar_redireccion_emergencia(
                 )
 
             # Si tenía reservas parciales bloqueadas, las liberamos antes de derivar para no retener stock local
-            if tiene_reservas and reservado_orden_ml > 0:
+            if tiene_reservas:
                 reservas = conexion.execute(
                     "SELECT DONACION_ID FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?",
                     (orden_id,),
                 ).fetchall()
                 for (don_id,) in reservas:
-                    conexion.execute("""
+                    conexion.execute(
+                        """
                         UPDATE DONACIONES
-                        SET ESTADO = CASE WHEN FECHA_VENCIMIENTO >= ? THEN 'Disponible' ELSE 'Vencida' END
+                        SET ESTADO = CASE
+                            WHEN FECHA_VENCIMIENTO < ?
+                                THEN 'Vencida'
+                            WHEN ESTADO_LABORATORIO = 'Bloqueada'
+                                THEN 'Bloqueada'
+                            WHEN ESTADO_LABORATORIO = 'Liberada'
+                                 AND FECHA_VENCIMIENTO >= ?
+                                THEN 'Disponible'
+                            ELSE 'Pendiente de análisis'
+                        END
                         WHERE ID = ? AND ESTADO = 'Reservada'
-                    """, (hoy.isoformat(), don_id))
+                        """,
+                        (
+                            hoy.isoformat(),
+                            hoy.isoformat(),
+                            don_id,
+                        ),
+                    )
                 conexion.execute("DELETE FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?", (orden_id,))
 
             if centro_elegido:
