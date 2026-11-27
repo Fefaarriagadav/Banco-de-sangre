@@ -19,7 +19,11 @@ from servicios.despachos import (
     validar_horario_despacho,
     validar_programacion,
 )
-from servicios.vencimientos import ZONA_HORARIA, validar_fecha
+from servicios.vencimientos import (
+    ZONA_HORARIA,
+    validar_fecha,
+    fecha_actual,
+)
 
 
 VIGENCIA_INTENTO = timedelta(minutes=5)
@@ -110,13 +114,54 @@ def _solicitud_aprobada(conexion, tipo, solicitud_id):
 
 
 def _bolsas_para_traslado(conexion, tipo, solicitud_id):
-    bolsas = consultar_bolsas_asignadas(conexion, tipo, solicitud_id)
+    bolsas = consultar_bolsas_asignadas(
+        conexion, tipo, solicitud_id
+    )
+
     if not bolsas:
-        raise ValueError("La solicitud no tiene bolsas asignadas.")
-    if any(bolsa["ESTADO"] != "Reservada" or bolsa["VOLUMEN_ML"] != bolsa["VOLUMEN_REAL_ML"]
-           for bolsa in bolsas):
-        raise ValueError("Hay bolsas asignadas que ya no coinciden con la reserva del despacho.")
-    return [{"id": bolsa["ID"], "volumen_ml": bolsa["VOLUMEN_ML"]} for bolsa in bolsas]
+        raise ValueError(
+            "La solicitud no tiene bolsas asignadas."
+        )
+
+    hoy = fecha_actual()
+
+    for bolsa in bolsas:
+        if (
+            bolsa["ESTADO"] != "Reservada"
+            or bolsa["VOLUMEN_ML"] != bolsa["VOLUMEN_REAL_ML"]
+        ):
+            raise ValueError(
+                "Hay bolsas asignadas que ya no coinciden "
+                "con la reserva del despacho."
+            )
+
+        if bolsa["ESTADO_LABORATORIO"] != "Liberada":
+            raise ValueError(
+                "Una bolsa asignada no tiene liberación "
+                "de laboratorio."
+            )
+
+        try:
+            vencimiento = validar_fecha(
+                bolsa["FECHA_VENCIMIENTO"], "%Y-%m-%d"
+            )
+        except ValueError:
+            raise ValueError(
+                "Una bolsa asignada tiene un vencimiento inválido."
+            ) from None
+
+        if vencimiento < hoy:
+            raise ValueError(
+                "Una bolsa asignada está vencida."
+            )
+
+    return [
+        {
+            "id": bolsa["ID"],
+            "volumen_ml": bolsa["VOLUMEN_ML"],
+        }
+        for bolsa in bolsas
+    ]
 
 
 def _texto_obligatorio(valor, nombre):
@@ -140,10 +185,21 @@ def generar_hoja_ruta(tipo, solicitud_id, empleado_id, *, destino=None, fecha=No
         validar_enfermero(conexion, empleado_id, "generar hojas de ruta")
         solicitud = _solicitud_aprobada(conexion, tipo, solicitud_id)
         solicitud_id = solicitud["ID"]
+        # Validar también si la hoja ya había sido generada.
+        bolsas = _bolsas_para_traslado(
+            conexion, tipo, solicitud_id
+        )
+
         hoja = _buscar_hoja(conexion, tipo, solicitud_id)
+
         if hoja is not None:
+            if bolsas != hoja["bolsas"]:
+                raise ValueError(
+                    "Las bolsas asignadas cambiaron desde "
+                    "que se generó la hoja de ruta."
+                )
             return hoja
-        bolsas = _bolsas_para_traslado(conexion, tipo, solicitud_id)
+
         if tipo == "Programado":
             destino = solicitud["DESTINO"]
             fecha = validar_fecha(solicitud["FECHA_DESPACHO"], "%Y-%m-%d").isoformat()

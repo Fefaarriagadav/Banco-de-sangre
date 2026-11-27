@@ -145,31 +145,34 @@ class IntegracionH5H6Test(unittest.TestCase):
             [(1, 450, "AB", "-", "Refrigerador 3")]
         )
 
-        #comprobar el resumen de stock
+        # HU14: registrar la extracción no autoriza laboratorio.
         resumen = v.consultar_resumen(
             self.ruta,
-            ahora=self.ahora
+            ahora=self.ahora,
         )
 
-        self.assertEqual(resumen["unidades"], 1)
-        self.assertAlmostEqual(resumen["litros"], 0.45)
+        self.assertEqual(resumen["unidades"], 0)
+        self.assertEqual(resumen["litros"], 0)
+        self.assertEqual(resumen["proximas"], [])
 
-        #comprobar el stock detallado
         detalle = v.consultar_stock_detallado(
             self.ruta,
-            ahora=self.ahora
+            ahora=self.ahora,
         )
 
-        total = next(
-            t for t in detalle["totales"]
-            if (t["grupo"], t["rh"]) == ("AB", "-")
-        )
+        self.assertEqual(detalle["unidades"], [])
 
-        self.assertAlmostEqual(total["litros"], 0.45)
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            laboratorio = conexion.execute(
+                """
+                SELECT ESTADO_LABORATORIO
+                FROM DONACIONES
+                """
+            ).fetchone()[0]
 
         self.assertEqual(
-            detalle["unidades"][0]["CANTIDAD"],
-            450
+            laboratorio,
+            "Pendiente de análisis",
         )
 
         #comprobar que la donación cambia a vencida

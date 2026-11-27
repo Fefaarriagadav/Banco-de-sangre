@@ -19,7 +19,9 @@ class BaseTemporal(unittest.TestCase):
                     TIPO_SANGRE TEXT,
                     FACTOR_RH TEXT,
                     ESTADO TEXT,
-                    FECHA_VENCIMIENTO TEXT
+                    FECHA_VENCIMIENTO TEXT,
+                    ESTADO_LABORATORIO TEXT NOT NULL
+                        DEFAULT 'Pendiente de análisis'
                 );
                 CREATE TABLE UMBRALES (
                     GRUPO_SANGUINEO TEXT,
@@ -41,11 +43,36 @@ class BaseTemporal(unittest.TestCase):
         self.parche_ruta.start()
         self.addCleanup(self.parche_ruta.stop)
 
-    def bolsas(self, grupo='A', rh='+', cantidad=1, estado='Disponible'):
+    def bolsas(
+        self,
+        grupo="A",
+        rh="+",
+        cantidad=1,
+        estado="Disponible",
+        laboratorio="Liberada",
+        vencimiento="2099-01-01",
+    ):
         with closing(sqlite3.connect(self.ruta)) as bd, bd:
             bd.executemany(
-                'INSERT INTO DONACIONES (TIPO_SANGRE, FACTOR_RH, ESTADO) VALUES (?, ?, ?)',
-                [(grupo, rh, estado)] * cantidad,
+                """
+                INSERT INTO DONACIONES (
+                    TIPO_SANGRE,
+                    FACTOR_RH,
+                    ESTADO,
+                    ESTADO_LABORATORIO,
+                    FECHA_VENCIMIENTO
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        grupo,
+                        rh,
+                        estado,
+                        laboratorio,
+                        vencimiento,
+                    )
+                ] * cantidad,
             )
 
     def hospital(self, nombre, grupo='A', rh='+', cantidad=3, direccion='Concepción'):
@@ -104,6 +131,40 @@ class AlertasStockTest(BaseTemporal):
             bd.execute('DROP TABLE UMBRALES')
         with self.assertRaisesRegex(ValueError, 'base de datos'):
             servicio.obtener_alertas_sobreabastecimiento()
+    def test_no_cuenta_unidades_pendientes_de_laboratorio(self):
+        self.bolsas(
+            cantidad=6,
+            laboratorio="Pendiente de análisis",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
+
+    def test_no_cuenta_unidades_bloqueadas_por_laboratorio(self):
+        self.bolsas(
+            cantidad=6,
+            estado="Disponible",
+            laboratorio="Bloqueada",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
+
+    def test_liberacion_no_permite_contar_unidades_vencidas(self):
+        self.bolsas(
+            cantidad=6,
+            laboratorio="Liberada",
+            vencimiento="2000-01-01",
+        )
+
+        self.assertEqual(
+            servicio.obtener_alertas_sobreabastecimiento(),
+            [],
+        )
 
 class SugerenciasTest(BaseTemporal):
     def test_sin_hospitales_no_hay_sugerencias(self):

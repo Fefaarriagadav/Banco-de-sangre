@@ -51,6 +51,14 @@ class TestDespachoEmergencia(unittest.TestCase):
                 (2, NULL, 'A', '+', 450, 'Disponible', '2099-01-01'),
                 (3, NULL, 'A', '+', 450, 'Disponible', '2099-01-01');
             """)
+            # Solo para esta base temporal: unidades ya aprobadas.
+            conexion.execute(
+                """
+                ALTER TABLE DONACIONES
+                ADD COLUMN ESTADO_LABORATORIO TEXT NOT NULL
+                DEFAULT 'Liberada'
+                """
+            )
 
             # Crear las tablas de emergencia
             crear_tabla_emergencias(conexion)

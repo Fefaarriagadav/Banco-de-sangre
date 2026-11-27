@@ -106,6 +106,7 @@ def _obtener_muestra(conexion, muestra_id):
             m.DONACION_ID,
             m.ESTADO,
             d.ESTADO AS ESTADO_UNIDAD,
+            d.ESTADO_LABORATORIO,
             d.FECHA_VENCIMIENTO
         FROM MUESTRAS AS m
         JOIN DONACIONES AS d ON d.ID = m.DONACION_ID
@@ -271,11 +272,23 @@ def guardar_resultado(
                 "en su estado actual."
             )
 
-        if muestra["ESTADO_UNIDAD"] != PENDIENTE_ANALISIS:
+        pendiente = (
+            muestra["ESTADO_UNIDAD"] == PENDIENTE_ANALISIS
+            and muestra["ESTADO_LABORATORIO"]
+            == PENDIENTE_ANALISIS
+        )
+
+        bloqueada_por_laboratorio = (
+            muestra["ESTADO_UNIDAD"] == "Bloqueada"
+            and muestra["ESTADO_LABORATORIO"] == "Bloqueada"
+        )
+
+        if not (pendiente or bloqueada_por_laboratorio):
             raise ValueError(
-                "La unidad debe estar pendiente de análisis. "
-                "No se modificarán unidades bloqueadas, reservadas "
-                "o en estados terminales."
+                "Solo se admiten resultados para unidades pendientes "
+                "o bloqueadas por laboratorio. No se modificarán "
+                "unidades liberadas, reservadas, usadas, descartadas "
+                "o vencidas."
             )
 
         vencimiento = validar_fecha(
@@ -442,5 +455,16 @@ def guardar_resultado(
                     "No autoriza la liberación de la unidad.",
                 ),
             )
+        # HU14-T3: resultado, historial y decisión de laboratorio
+        # se confirman o revierten juntos.
+        from servicios.liberacion import evaluar_en_transaccion
+
+        evaluar_en_transaccion(
+            conexion,
+            muestra["DONACION_ID"],
+            empleado_id,
+            instante,
+            muestra_id=muestra_id,
+        )
 
         return _consultar(conexion, muestra_id)

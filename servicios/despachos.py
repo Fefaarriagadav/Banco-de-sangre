@@ -162,6 +162,7 @@ def _volumen_disponible(conexion, grupo, rh, hoy):
         FROM DONACIONES AS u
         LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
         WHERE u.ESTADO = 'Disponible'
+        AND u.ESTADO_LABORATORIO = 'Liberada'
           AND u.FECHA_VENCIMIENTO >= ?
           AND COALESCE(u.TIPO_SANGRE, d.GRUPO_SANGUINEO, '?') = ?
           AND COALESCE(u.FACTOR_RH, d.FACTOR_RH, '?') = ?
@@ -261,6 +262,7 @@ def seleccionar_bolsas_emergencia(conexion, grupo, rh, volumen_solicitado, hoy):
         LEFT JOIN DONANTES AS d
             ON d.ID = u.DONANTE
         WHERE u.ESTADO = 'Disponible'
+        AND u.ESTADO_LABORATORIO = 'Liberada'
           AND u.FECHA_VENCIMIENTO >= ?
           AND COALESCE(
               u.TIPO_SANGRE, d.GRUPO_SANGUINEO, '?'
@@ -369,7 +371,7 @@ def registrar_emergencia(centro, grupo, rh, volumen_ml, motivo, *, ruta=RUTA_BD,
             solicitud_id = cursor.lastrowid
             #se reservan las bolsas soliciidas
             for id_bolsa, ml in bolsas:
-                actualizacion = conexion.execute("""UPDATE DONACIONES SET ESTADO = 'Reservada' WHERE ID = ? AND ESTADO = 'Disponible' AND FECHA_VENCIMIENTO >= ? """, (id_bolsa, hoy.isoformat()))
+                actualizacion = conexion.execute("""UPDATE DONACIONES SET ESTADO = 'Reservada' WHERE ID = ? AND ESTADO = 'Disponible' AND ESTADO_LABORATORIO = 'Liberada' AND FECHA_VENCIMIENTO >= ? """, (id_bolsa, hoy.isoformat()))
 
                 if actualizacion.rowcount != 1:
                     raise ValueError("El stock cambió durante la reserva. " "Vuelva a intentar.")
@@ -547,20 +549,57 @@ def aprobar_solicitud(tipo, solicitud_id, empleado_id, *, ruta=RUTA_BD):
 
             if tipo == "Emergencia":
                 #la emergencia reserva la docnaión al registrarse
-                reservas = conexion.execute("""SELECT r.DONACION_ID,r.VOLUMEN_ML,d.CANTIDAD,d.ESTADO,d.FECHA_VENCIMIENTO
-                    FROM RESERVAS_EMERGENCIA AS r JOIN DONACIONES AS d ON d.ID = r.DONACION_ID WHERE r.SOLICITUD_ID = ? """, (solicitud_id,)).fetchall()
+                reservas = conexion.execute(
+                    """
+                    SELECT
+                        r.DONACION_ID,
+                        r.VOLUMEN_ML,
+                        d.CANTIDAD,
+                        d.ESTADO,
+                        d.FECHA_VENCIMIENTO,
+                        d.ESTADO_LABORATORIO
+                    FROM RESERVAS_EMERGENCIA AS r
+                    JOIN DONACIONES AS d
+                        ON d.ID = r.DONACION_ID
+                    WHERE r.SOLICITUD_ID = ?
+                    """,
+                    (solicitud_id,),
+                ).fetchall()
 
                 if not reservas:
-                    raise ValueError("Esta emergencia no tiene bolsas reservadas. " "No es posible aprobarla.")
+                    raise ValueError(
+                        "Esta emergencia no tiene bolsas reservadas. "
+                        "No es posible aprobarla."
+                    )
 
-                for donacion_id, ml_reservados, ml_real, estado, vencimiento in reservas:
-                    if (estado != "Reservada" or vencimiento < hoy.isoformat() or ml_reservados != ml_real):
-                        raise ValueError("Una bolsa reservada ya no es apta. " "Revise la solicitud antes de aprobar.")
-
-                volumen_asignado = sum(fila[1] for fila in reservas)
+                for (
+                    donacion_id,
+                    ml_reservados,
+                    ml_real,
+                    estado,
+                    vencimiento,
+                    laboratorio,
+                ) in reservas:
+                    if (
+                        estado != "Reservada"
+                        or not vencimiento
+                        or vencimiento < hoy.isoformat()
+                        or ml_reservados != ml_real
+                        or laboratorio != "Liberada"
+                    ):
+                        raise ValueError(
+                            "Una bolsa reservada ya no es apta "
+                            "o no tiene liberación de laboratorio. "
+                            "Revise la solicitud antes de aprobar."
+                        )
+                volumen_asignado = sum(
+                    fila[1] for fila in reservas
+                )
 
                 if volumen_asignado < datos["VOLUMEN_ML"]:
-                    raise ValueError("El volumen reservado no cubre la emergencia.")
+                    raise ValueError(
+                        "El volumen reservado no cubre la emergencia."
+                    )
 
             else:
                 #para despachso programdos no se puedne aprobar si es que la fecha ya paso 
@@ -581,7 +620,7 @@ def aprobar_solicitud(tipo, solicitud_id, empleado_id, *, ruta=RUTA_BD):
                 if volumen_asignado != volumen_pedido:
                     raise ValueError(f"Las bolsas completas suman {volumen_asignado} mL, " f"pero se solicitaron {volumen_pedido} mL. " "No se puede aprobar automáticamente esta combinación.")
                 for donacion_id, ml in bolsas:
-                    resultado = conexion.execute("""UPDATE DONACIONES SET ESTADO = 'Reservada' WHERE ID = ? AND ESTADO = 'Disponible' AND FECHA_VENCIMIENTO >= ? """, (donacion_id, hoy.isoformat()))
+                    resultado = conexion.execute("""UPDATE DONACIONES SET ESTADO = 'Reservada' WHERE ID = ? AND ESTADO = 'Disponible' AND ESTADO_LABORATORIO = 'Liberada' AND FECHA_VENCIMIENTO >= ? """, (donacion_id, hoy.isoformat()))
                     if resultado.rowcount != 1:
                         raise ValueError("El inventario cambió. Actualice las solicitudes.")
 
@@ -625,7 +664,23 @@ def rechazar_solicitud(tipo, solicitud_id, empleado_id, motivo, *, ruta=RUTA_BD)
                 reservas = conexion.execute("""SELECT DONACION_ID FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ? """, (solicitud_id,)).fetchall()
                 for (donacion_id,) in reservas:
                     #si aún esta vigente, vuelve a Disponible, si venció queda Vencida.
-                    conexion.execute("""UPDATE DONACIONES SET ESTADO = CASE WHEN FECHA_VENCIMIENTO >= ? THEN 'Disponible' ELSE 'Vencida' END WHERE ID = ? AND ESTADO = 'Reservada' """, (hoy, donacion_id))
+                                        conexion.execute(
+                        """
+                        UPDATE DONACIONES
+                        SET ESTADO = CASE
+                            WHEN FECHA_VENCIMIENTO < ?
+                                THEN 'Vencida'
+                            WHEN ESTADO_LABORATORIO = 'Bloqueada'
+                                THEN 'Bloqueada'
+                            WHEN ESTADO_LABORATORIO = 'Liberada'
+                                 AND FECHA_VENCIMIENTO >= ?
+                                THEN 'Disponible'
+                            ELSE 'Pendiente de análisis'
+                        END
+                        WHERE ID = ? AND ESTADO = 'Reservada'
+                        """,
+                        (hoy, hoy, donacion_id),
+                    )
 
                 #eliminar vinculos de una reserva rechazada,permitiendo futuras reservas de las bolsas liberadas
                 conexion.execute("""DELETE FROM RESERVAS_EMERGENCIA WHERE SOLICITUD_ID = ?""", (solicitud_id,))
@@ -653,7 +708,8 @@ def consultar_bolsas_asignadas(conexion, tipo, solicitud_id):
         return []
     filas = conexion.execute(f"""
         SELECT u.ID, r.VOLUMEN_ML, u.CANTIDAD AS VOLUMEN_REAL_ML,
-               u.FECHA_VENCIMIENTO, u.ESTADO
+               u.FECHA_VENCIMIENTO, u.ESTADO,
+               u.ESTADO_LABORATORIO
         FROM {tabla} AS r JOIN DONACIONES AS u ON u.ID = r.DONACION_ID
         WHERE r.SOLICITUD_ID = ?
         ORDER BY u.FECHA_VENCIMIENTO ASC, u.ID ASC
@@ -674,7 +730,7 @@ def consultar_detalle_solicitud(tipo, solicitud_id, *, ruta=RUTA_BD):
         rh = datos["FACTOR_RH"]
         #stock disponible en el moemnto de el tipo de sangre y factor rh 
         disponibles = conexion.execute("""SELECT u.ID, u.CANTIDAD AS VOLUMEN_ML, u.FECHA_VENCIMIENTO, u.ESTADO FROM DONACIONES AS u LEFT JOIN DONANTES AS d
-            ON d.ID = u.DONANTE WHERE u.ESTADO = 'Disponible' AND u.FECHA_VENCIMIENTO >= ? AND COALESCE(u.TIPO_SANGRE, d.GRUPO_SANGUINEO) = ? AND COALESCE(u.FACTOR_RH, d.FACTOR_RH) = ?
+            ON d.ID = u.DONANTE WHERE u.ESTADO = 'Disponible' AND u.ESTADO_LABORATORIO = 'Liberada' AND u.FECHA_VENCIMIENTO >= ? AND COALESCE(u.TIPO_SANGRE, d.GRUPO_SANGUINEO) = ? AND COALESCE(u.FACTOR_RH, d.FACTOR_RH) = ?
             AND u.CANTIDAD > 0 ORDER BY u.FECHA_VENCIMIENTO ASC, u.ID ASC """, (hoy, grupo, rh)).fetchall()
         bolsas_disponibles = [dict(fila) for fila in disponibles]
         bolsas_asignadas = consultar_bolsas_asignadas(conexion, tipo, solicitud_id)

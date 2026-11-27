@@ -3,6 +3,7 @@ from contextlib import closing
 
 from datos.configuracion import RUTA_BD
 from servicios.vencimientos import DISPONIBLE
+from servicios.vencimientos import DISPONIBLE, fecha_actual
 
 
 def obtener_alertas_sobreabastecimiento():
@@ -16,9 +17,11 @@ def obtener_alertas_sobreabastecimiento():
                 SELECT TIPO_SANGRE, FACTOR_RH, COUNT(ID)
                 FROM DONACIONES
                 WHERE ESTADO = ?
+                  AND ESTADO_LABORATORIO = 'Liberada'
+                  AND FECHA_VENCIMIENTO >= ?
                 GROUP BY TIPO_SANGRE, FACTOR_RH
                 """,
-                (DISPONIBLE,),
+                (DISPONIBLE, fecha_actual().isoformat()),
             )
 
             stock_agrupado = {

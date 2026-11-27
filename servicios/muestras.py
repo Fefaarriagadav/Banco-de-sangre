@@ -268,6 +268,17 @@ def registrar_muestra(
                 f"Estado previo de la unidad: {donacion['ESTADO']}.",
             ),
         )
+        # HU14-T3: una nueva muestra invalida la autorización
+        # anterior y reevalúa todas las muestras de la unidad.
+        from servicios.liberacion import evaluar_en_transaccion
+
+        evaluar_en_transaccion(
+            conexion,
+            donacion_id,
+            empleado_id,
+            instante,
+            muestra_id=muestra_id,
+        )
 
         return _consultar_muestra(conexion, muestra_id)
 

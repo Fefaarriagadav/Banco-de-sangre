@@ -181,7 +181,11 @@ class ResultadosAnalisisTest(unittest.TestCase):
         self.assertTrue(datos["TIENE_NO_CONFORMES"])
         self.assertEqual(
             datos["MUESTRA"]["ESTADO_UNIDAD"],
-            r.PENDIENTE_ANALISIS,
+            "Bloqueada",
+        )
+        self.assertEqual(
+            datos["MUESTRA"]["ESTADO_LABORATORIO"],
+            "Bloqueada",
         )
 
     def test_sin_catalogo_obligatorio_no_hay_completitud(self):

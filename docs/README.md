@@ -471,3 +471,40 @@ python pantalla.py
 
 Se verificaron permisos, resultados parciales, versiones, motivos de
 corrección, transacciones y conservación de la exclusión del stock.
+
+### HU14-T3: Evaluación, liberación y bloqueo de unidades
+
+El módulo de laboratorio muestra todas las muestras y donaciones,
+con filtros por identificador/responsable, situación y grupo/Rh.
+Permite abrir resultados y registrar nuevas muestras desde una fila.
+
+La evaluación considera todas las muestras de la donación:
+- Un resultado No conforme bloquea automáticamente la unidad.
+- Los controles incompletos o un catálogo obligatorio vacío impiden liberarla.
+- Los controles completos y conformes requieren autorización explícita
+  de un Enfermero, indicando un motivo.
+- Registrar otra muestra o actualizar resultados revoca la autorización
+  anterior y vuelve a evaluar la unidad.
+
+ESTADO_LABORATORIO se mantiene separado del estado de inventario.
+La liberación no reactiva unidades vencidas, usadas, descartadas o reservadas.
+
+Stock, sobreabastecimiento y selección para despachos exigen unidades
+disponibles, vigentes y liberadas por laboratorio. También se comprueba
+la autorización al aprobar reservas, generar hojas de ruta y notificar
+a logística. Cancelar o redirigir una solicitud no devuelve unidades
+pendientes o bloqueadas al stock disponible.
+
+El historial conserva responsable, fecha, motivo, muestras y versiones
+de resultados utilizadas. Se distingue la evaluación automática de
+la autorización expresa del personal.
+
+Las donaciones anteriores quedan sin autorización de laboratorio:
+la migración no las aprueba automáticamente.
+
+La demo incluye ocho escenarios: sin muestras, sin resultados,
+resultados parciales, conformes sin autorización, bloqueo,
+liberación, revocación por nueva muestra y vencimiento.
+
+Los controles de demostración son ficticios y no tienen validez clínica.
+El catálogo obligatorio y sus reglas requieren validación del PO.

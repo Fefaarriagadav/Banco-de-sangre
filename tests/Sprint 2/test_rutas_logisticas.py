@@ -47,8 +47,15 @@ class RutasLogisticasTest(unittest.TestCase):
             ))
             conexion.execute("INSERT INTO CENTROS_MEDICOS VALUES (?, ?, ?)", (CENTRO, "Dirección de prueba", "Concepción"))
             conexion.executemany("""
-                INSERT INTO DONACIONES (ID, TIPO_SANGRE, FACTOR_RH, CANTIDAD, FECHA_VENCIMIENTO, ESTADO)
-                VALUES (?, 'O', '+', ?, '2099-12-30', 'Disponible')
+                INSERT INTO DONACIONES (
+                    ID, TIPO_SANGRE, FACTOR_RH, CANTIDAD,
+                    FECHA_VENCIMIENTO, ESTADO,
+                    ESTADO_LABORATORIO
+                )
+                VALUES (
+                    ?, 'O', '+', ?, '2099-12-30',
+                    'Disponible', 'Liberada'
+                )
             """, ((1, 400), (2, 250), (3, 350)))
 
     def registrar_programado(self):
@@ -256,3 +263,108 @@ class RutasLogisticasTest(unittest.TestCase):
             finally:
                 finalizar.set()
             self.assertEqual(futuro.result(timeout=5)["estado"], "Enviado")
+
+    def test_no_genera_hoja_sin_liberacion_de_laboratorio(self):
+        solicitud = self.registrar_programado()
+
+        aprobar_solicitud(
+            "Programado",
+            solicitud,
+            ENFERMERO,
+            ruta=self.ruta,
+        )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO_LABORATORIO = 'Pendiente de análisis'
+                WHERE ESTADO = 'Reservada'
+                """
+            )
+
+        with self.assertRaisesRegex(
+            ValueError, "liberación de laboratorio"
+        ):
+            generar_hoja_ruta(
+                "Programado",
+                solicitud,
+                ENFERMERO,
+                ruta=self.ruta,
+            )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            cantidad = conexion.execute(
+                "SELECT COUNT(*) FROM HOJAS_RUTA"
+            ).fetchone()[0]
+
+        self.assertEqual(cantidad, 0)
+
+    def test_hoja_existente_no_evade_validacion_de_laboratorio(self):
+        hoja = self.generar_programado()
+
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO_LABORATORIO = 'Bloqueada'
+                WHERE ESTADO = 'Reservada'
+                """
+            )
+
+        with self.assertRaisesRegex(
+            ValueError, "liberación de laboratorio"
+        ):
+            generar_hoja_ruta(
+                "Programado",
+                hoja["solicitud_id"],
+                ENFERMERO,
+                ruta=self.ruta,
+            )
+
+        # Se conserva el documento como registro histórico.
+        historica = consultar_hoja_ruta(
+            "Programado",
+            hoja["solicitud_id"],
+            ENFERMERO,
+            ruta=self.ruta,
+        )
+
+        self.assertEqual(historica["id"], hoja["id"])
+
+    def test_no_notifica_hoja_con_laboratorio_revocado(self):
+        hoja = self.generar_programado()
+
+        with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
+            conexion.execute(
+                """
+                UPDATE DONACIONES
+                SET ESTADO_LABORATORIO = 'Pendiente de análisis'
+                WHERE ESTADO = 'Reservada'
+                """
+            )
+
+        with patch(
+            "servicios.rutas_logisticas._enviar_hoja"
+        ) as enviar:
+            with self.assertRaisesRegex(
+                ValueError, "liberación de laboratorio"
+            ):
+                notificar_logistica(
+                    "Programado",
+                    hoja["solicitud_id"],
+                    ENFERMERO,
+                    ruta=self.ruta,
+                )
+
+            enviar.assert_not_called()
+
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            cantidad = conexion.execute(
+                "SELECT COUNT(*) FROM NOTIFICACIONES_LOGISTICAS"
+            ).fetchone()[0]
+
+        self.assertEqual(cantidad, 0)
+
+if __name__ == "__main__":
+    unittest.main()

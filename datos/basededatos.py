@@ -1,4 +1,5 @@
 import sqlite3
+from servicios.liberacion import migrar_liberacion
 from servicios.muestras import migrar_muestras
 from datos.configuracion import RUTA_BD
 from servicios.despachos import migrar_despachos
@@ -73,5 +74,7 @@ def inicializar_base(ruta=RUTA_BD):
     migrar_redirecciones(conexion)
     migrar_muestras(conexion)
     migrar_resultados(conexion)
+    migrar_liberacion(conexion)
+
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos

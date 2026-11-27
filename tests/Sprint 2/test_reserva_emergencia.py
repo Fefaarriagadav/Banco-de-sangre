@@ -52,6 +52,14 @@ class TestReservaEmergencia(unittest.TestCase):
                 (2, NULL, 'A', '+', 450, 'Disponible', '2099-01-01'),
                 (3, NULL, 'A', '+', 450, 'Disponible', '2099-01-01');
             """)
+            # Solo para esta base temporal: unidades ya aprobadas.
+            conexion.execute(
+                """
+                ALTER TABLE DONACIONES
+                ADD COLUMN ESTADO_LABORATORIO TEXT NOT NULL
+                DEFAULT 'Liberada'
+                """
+            )
 
     def test_reserva_bolsas_completas(self):
         solicitud = registrar_emergencia(

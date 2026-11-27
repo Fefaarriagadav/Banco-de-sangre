@@ -326,6 +326,7 @@ def consultar_resumen(
             SELECT COUNT(*), COALESCE(SUM(CANTIDAD), 0)
             FROM DONACIONES
             WHERE ESTADO = ?
+              AND ESTADO_LABORATORIO = 'Liberada'
               AND FECHA_VENCIMIENTO >= ?
             """,
             (DISPONIBLE, hoy.isoformat()),
@@ -344,6 +345,7 @@ def consultar_resumen(
             FROM DONACIONES AS u
             LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
             WHERE u.ESTADO = ?
+              AND u.ESTADO_LABORATORIO = 'Liberada'
               AND u.FECHA_VENCIMIENTO BETWEEN ? AND ?
             ORDER BY u.FECHA_VENCIMIENTO, u.ID
             """,
@@ -391,6 +393,7 @@ def consultar_stock_detallado(ruta=RUTA_BD, ahora=None):
             FROM DONACIONES AS u
             LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
             WHERE u.ESTADO = ?
+              AND u.ESTADO_LABORATORIO = 'Liberada'
               AND u.FECHA_VENCIMIENTO >= ?
             ORDER BY GRUPO, RH, u.FECHA_VENCIMIENTO, u.ID
             """,

@@ -5,6 +5,7 @@ from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
 from servicios.despachos import (seleccionar_bolsas_emergencia,crear_tabla_reservas_emergencia,registrar_emergencia,ExcesoVolumenError,)
+from servicios.despachos import consultar_volumen_disponible
 
 class TestFEFODespachos(unittest.TestCase):
     def setUp(self):
@@ -20,18 +21,47 @@ class TestFEFODespachos(unittest.TestCase):
                 CREATE TABLE DONACIONES (
                     ID INTEGER PRIMARY KEY, DONANTE INTEGER,
                     TIPO_SANGRE TEXT, FACTOR_RH TEXT,
-                    CANTIDAD INTEGER, ESTADO TEXT, FECHA_VENCIMIENTO TEXT
+                    CANTIDAD INTEGER,
+                    ESTADO TEXT,
+                    FECHA_VENCIMIENTO TEXT,
+                    ESTADO_LABORATORIO TEXT NOT NULL
+                        DEFAULT 'Pendiente de análisis'
                 );
             ''')
             crear_tabla_reservas_emergencia(conexion)
 
-    def bolsa(self, identificador, volumen, dias=5, estado='Disponible', grupo='A', rh='+'):
+    def bolsa(
+        self,
+        identificador,
+        volumen,
+        dias=5,
+        estado="Disponible",
+        grupo="A",
+        rh="+",
+        laboratorio="Liberada",
+    ):
         fecha = (self.hoy + timedelta(days=dias)).isoformat()
+
         with closing(sqlite3.connect(self.ruta)) as conexion, conexion:
-            conexion.execute('''INSERT INTO DONACIONES
-                (ID, TIPO_SANGRE, FACTOR_RH, CANTIDAD, ESTADO, FECHA_VENCIMIENTO)
-                VALUES (?, ?, ?, ?, ?, ?)''',
-                (identificador, grupo, rh, volumen, estado, fecha))
+            conexion.execute(
+                """
+                INSERT INTO DONACIONES (
+                    ID, TIPO_SANGRE, FACTOR_RH,
+                    CANTIDAD, ESTADO, FECHA_VENCIMIENTO,
+                    ESTADO_LABORATORIO
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    identificador,
+                    grupo,
+                    rh,
+                    volumen,
+                    estado,
+                    fecha,
+                    laboratorio,
+                ),
+            )
 
     def seleccionar(self, volumen):
         with closing(sqlite3.connect(self.ruta)) as conexion:
@@ -88,6 +118,79 @@ class TestFEFODespachos(unittest.TestCase):
                 self.assertEqual(conexion.execute('SELECT COUNT(*) FROM DESPACHOS_EMERGENCIA').fetchone()[0], 0)
             self.assertEqual(conexion.execute('SELECT ESTADO FROM DONACIONES WHERE ID=1').fetchone()[0], 'Disponible')
 
+
+    def test_seleccion_excluye_pendientes_y_bloqueadas(self):
+        self.bolsa(
+            1, 450, dias=1,
+            laboratorio="Pendiente de análisis",
+        )
+        self.bolsa(
+            2, 450, dias=2,
+            laboratorio="Bloqueada",
+        )
+        self.bolsa(
+            3, 450, dias=3,
+            laboratorio="Liberada",
+        )
+
+        bolsas, total = self.seleccionar(450)
+
+        self.assertEqual(total, 450)
+        self.assertEqual(
+            [bolsa[0] for bolsa in bolsas],
+            [3],
+        )
+
+    def test_volumen_disponible_exige_liberacion(self):
+        self.bolsa(
+            1, 200,
+            laboratorio="Pendiente de análisis",
+        )
+        self.bolsa(
+            2, 250,
+            laboratorio="Bloqueada",
+        )
+        self.bolsa(
+            3, 450,
+            laboratorio="Liberada",
+        )
+
+        volumen = consultar_volumen_disponible(
+            "Hospital Prueba",
+            "A",
+            "+",
+            ruta=self.ruta,
+        )
+
+        self.assertEqual(volumen, 450)
+
+    def test_emergencia_no_reserva_unidad_sin_liberacion(self):
+        self.bolsa(
+            1, 450,
+            laboratorio="Pendiente de análisis",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Stock insuficiente"):
+            registrar_emergencia(
+                "Hospital Prueba",
+                "A",
+                "+",
+                450,
+                "Urgencia ficticia",
+                ruta=self.ruta,
+            )
+
+        with closing(sqlite3.connect(self.ruta)) as conexion:
+            estado = conexion.execute(
+                "SELECT ESTADO FROM DONACIONES WHERE ID = 1"
+            ).fetchone()[0]
+
+            reservas = conexion.execute(
+                "SELECT COUNT(*) FROM RESERVAS_EMERGENCIA"
+            ).fetchone()[0]
+
+        self.assertEqual(estado, "Disponible")
+        self.assertEqual(reservas, 0)
 
 if __name__ == '__main__':
     unittest.main()

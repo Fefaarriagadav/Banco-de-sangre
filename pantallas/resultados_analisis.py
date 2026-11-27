@@ -18,18 +18,31 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
     if anterior is not None and anterior.winfo_exists():
         anterior.destroy()
 
-    frame = ctk.CTkFrame(pantalla)
-    frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-    pantalla._pantalla_resultados = frame
+    contenedor = ctk.CTkFrame(pantalla)
+    contenedor.place(relx=0, rely=0, relwidth=1, relheight=1)
+    pantalla._pantalla_resultados = contenedor
+
+    pie_acciones = ctk.CTkFrame(
+        contenedor, fg_color="transparent"
+    )
+    pie_acciones.pack(side="bottom", fill="x")
+
+    cabecera = ctk.CTkFrame(
+        contenedor, fg_color="transparent"
+    )
+    cabecera.pack(side="top", fill="x")
+
+    frame = ctk.CTkScrollableFrame(contenedor)
+    frame.pack(fill="both", expand=True)
 
     ctk.CTkLabel(
-        frame,
+        cabecera,
         text=f"Resultados de la muestra #{muestra_id}",
         font=("Arial", 24, "bold"),
     ).pack(pady=(15, 5))
 
     resumen = ctk.CTkLabel(
-        frame,
+        cabecera,
         text="Consultando...",
         wraplength=1000,
     )
@@ -40,7 +53,7 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
     formulario.grid_columnconfigure(1, weight=1)
 
     ctk.CTkLabel(
-        formulario, text="Análisis"
+        formulario, text="Control de laboratorio"
     ).grid(row=0, column=0, padx=10, pady=5, sticky="w")
 
     selector = ctk.CTkOptionMenu(
@@ -217,6 +230,40 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
 
     selector.configure(command=cargar_analisis)
 
+    def seleccionar_resultado(event=None):
+        seleccion = tabla_resultados.selection()
+
+        if not seleccion or datos_actuales is None:
+            return
+
+        valores = tabla_resultados.item(
+            seleccion[0], "values"
+        )
+        codigo = valores[0]
+
+        control = next(
+            (
+                fila
+                for fila in datos_actuales["CATALOGO"]
+                if fila["CODIGO"] == codigo
+            ),
+            None,
+        )
+
+        if control is None:
+            return
+
+        for etiqueta, identificador in analisis_por_etiqueta.items():
+            if identificador == control["ID"]:
+                selector.set(etiqueta)
+                cargar_analisis()
+                break
+
+    tabla_resultados.bind(
+        "<<TreeviewSelect>>",
+        seleccionar_resultado,
+    )
+
     def presentar(datos):
         nonlocal datos_actuales, analisis_por_etiqueta
 
@@ -224,7 +271,17 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
         datos_actuales = datos
         muestra = datos["MUESTRA"]
 
-        if not datos["CATALOGO_CONFIGURADO"]:
+        laboratorio = muestra["ESTADO_LABORATORIO"]
+
+        if laboratorio == "Bloqueada":
+            estado_controles = "Unidad bloqueada por laboratorio."
+        elif laboratorio == "Liberada":
+            estado_controles = (
+                "Liberación de laboratorio autorizada. "
+                "La disponibilidad depende también del inventario "
+                "y del vencimiento."
+            )
+        elif not datos["CATALOGO_CONFIGURADO"]:
             estado_controles = (
                 "Falta configurar el catálogo obligatorio. "
                 "No se consideran completos los análisis."
@@ -244,16 +301,19 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
 
         resumen.configure(
             text=(
-                f"Donación #{muestra['DONACION_ID']} · "
-                f"Muestra: {muestra['ESTADO']} · "
-                f"Unidad: {muestra['ESTADO_UNIDAD']}\n"
+                f"DONACIÓN / UNIDAD #{muestra['DONACION_ID']}"
+                f"     →     MUESTRA #{muestra_id}\n"
+                f"Estado de la muestra: {muestra['ESTADO']}\n"
+                f"Inventario: {muestra['ESTADO_UNIDAD']} · "
+                f"Laboratorio: {muestra['ESTADO_LABORATORIO']}\n\n"
                 f"{estado_controles}"
-            )
+            ),
+            font=("Arial", 15),
         )
 
         analisis_por_etiqueta = {
             (
-                f"{fila['CODIGO']} — {fila['NOMBRE']} "
+                f"Control {fila['CODIGO']} — {fila['NOMBRE']} "
                 f"({'obligatorio' if fila['OBLIGATORIO'] else 'opcional'})"
             ): fila["ID"]
             for fila in datos["CATALOGO"]
@@ -271,14 +331,26 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
             else (opciones[0] if opciones else "Sin catálogo")
         )
 
+        pendiente = (
+            muestra["ESTADO_UNIDAD"] == "Pendiente de análisis"
+            and muestra["ESTADO_LABORATORIO"]
+            == "Pendiente de análisis"
+        )
+
+        bloqueada_por_laboratorio = (
+            muestra["ESTADO_UNIDAD"] == "Bloqueada"
+            and muestra["ESTADO_LABORATORIO"] == "Bloqueada"
+        )
+
         editable = (
             bool(opciones)
             and muestra["ESTADO"] in (
                 "Pendiente de análisis",
                 "Pendiente de revisión",
             )
-            and muestra["ESTADO_UNIDAD"] == "Pendiente de análisis"
+            and (pendiente or bloqueada_por_laboratorio)
         )
+
         boton_guardar.configure(
             state="normal" if editable else "disabled"
         )
@@ -388,10 +460,26 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
     def volver():
         from pantallas.muestras import mostrar_muestras
 
-        frame.destroy()
+        contenedor.destroy()
         mostrar_muestras(pantalla, empleado_id)
 
-    acciones = ctk.CTkFrame(frame, fg_color="transparent")
+    def abrir_liberacion():
+        if datos_actuales is None:
+            informar_error("Primero consulte una muestra válida.")
+            return
+
+        from pantallas.liberacion import mostrar_liberacion
+
+        mostrar_liberacion(
+            pantalla,
+            datos_actuales["MUESTRA"]["DONACION_ID"],
+            empleado_id,
+            muestra_id,
+        )
+
+    acciones = ctk.CTkFrame(
+        pie_acciones, fg_color="transparent"
+    )
     acciones.pack(pady=10)
 
     boton_guardar = ctk.CTkButton(
@@ -406,6 +494,14 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
         acciones,
         text="Actualizar consulta",
         command=cargar,
+    ).pack(side="left", padx=8)
+
+    ctk.CTkButton(
+        acciones,
+        text="Revisar liberación",
+        command=abrir_liberacion,
+        fg_color="#15803D",
+        hover_color="#166534",
     ).pack(side="left", padx=8)
 
     ctk.CTkButton(

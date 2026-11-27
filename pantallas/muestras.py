@@ -4,10 +4,12 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from servicios.muestras import (
-    registrar_muestra,
-    consultar_muestra,
-    consultar_muestras_donacion,
+from servicios.muestras import registrar_muestra
+from servicios.consulta_laboratorio import (
+    SITUACIONES,
+    TIPOS,
+    listar_laboratorio,
+    filtrar_registros,
 )
 
 
@@ -21,215 +23,294 @@ def mostrar_muestras(pantalla, empleado_id):
     frame.place(relx=0, rely=0, relwidth=1, relheight=1)
     pantalla._pantalla_muestras = frame
 
-    ctk.CTkLabel(
-        frame,
-        text="Registro y consulta de muestras",
-        font=("Arial", 25, "bold"),
-    ).pack(pady=(20, 10))
+    frame.grid_columnconfigure(0, weight=1)
+    frame.grid_rowconfigure(3, weight=1)
 
     ctk.CTkLabel(
         frame,
-        text=(
-            "Registrar una muestra deja la unidad pendiente "
-            "de análisis y fuera del stock disponible."
+        text="Laboratorio: muestras y donaciones",
+        font=("Arial", 24, "bold"),
+    ).grid(row=0, column=0, pady=(15, 5))
+
+    filtros = ctk.CTkFrame(frame)
+    filtros.grid(
+        row=1, column=0, sticky="ew", padx=15, pady=5
+    )
+    filtros.grid_columnconfigure(0, weight=1)
+
+    busqueda = ctk.CTkEntry(
+        filtros,
+        placeholder_text=(
+            "Filtrar por ID de muestra, donación, "
+            "donante o responsable"
         ),
-        wraplength=750,
-    ).pack(pady=(0, 15))
-
-    formulario = ctk.CTkFrame(frame)
-    formulario.pack(fill="x", padx=25, pady=5)
-
-    ctk.CTkLabel(
-        formulario,
-        text="ID de donación:",
-    ).grid(row=0, column=0, padx=10, pady=15)
-
-    entrada_donacion = ctk.CTkEntry(
-        formulario,
-        placeholder_text="Donación existente",
-        width=200,
     )
-    entrada_donacion.grid(
-        row=0, column=1, padx=10, pady=15
+    busqueda.grid(
+        row=0, column=0, sticky="ew", padx=8, pady=10
     )
+
+    situacion = ctk.CTkOptionMenu(
+        filtros,
+        values=list(SITUACIONES),
+        width=225,
+    )
+    situacion.grid(row=0, column=1, padx=8)
+
+    tipo = ctk.CTkOptionMenu(
+        filtros,
+        values=list(TIPOS),
+        width=100,
+    )
+    tipo.grid(row=0, column=2, padx=8)
 
     mensaje = ctk.CTkLabel(
-        frame,
-        text="",
-        wraplength=800,
+        frame, text="", wraplength=1000
     )
-    mensaje.pack(pady=10)
+    mensaje.grid(row=2, column=0, padx=15, pady=5)
 
-    consulta = ctk.CTkFrame(frame)
-    consulta.pack(fill="x", padx=25, pady=5)
-
-    tipo_consulta = ctk.CTkOptionMenu(
-        consulta,
-        values=["ID de muestra", "ID de donación"],
-    )
-    tipo_consulta.grid(
-        row=0, column=0, padx=10, pady=15
+    pestanas = ctk.CTkTabview(frame)
+    pestanas.grid(
+        row=3, column=0, sticky="nsew", padx=15, pady=5
     )
 
-    entrada_busqueda = ctk.CTkEntry(
-        consulta,
-        placeholder_text="Identificador",
-        width=200,
-    )
-    entrada_busqueda.grid(
-        row=0, column=1, padx=10, pady=15
+    pie = ctk.CTkFrame(frame, fg_color="transparent")
+    pie.grid(
+        row=4, column=0, sticky="ew", padx=15, pady=10
     )
 
-    tabla_frame = ctk.CTkFrame(frame)
-    tabla_frame.pack(
-        fill="both", expand=True, padx=25, pady=15
+    seleccion = ctk.CTkLabel(
+        pie, text="Seleccione una fila para trabajar."
     )
-    tabla_frame.grid_columnconfigure(0, weight=1)
-    tabla_frame.grid_rowconfigure(0, weight=1)
+    seleccion.pack(side="left", padx=5)
 
-    columnas = (
-        "muestra",
-        "donacion",
-        "estado",
-        "unidad",
-        "responsable",
-        "fecha",
-    )
+    def crear_tabla(nombre, columnas):
+        tab = pestanas.add(nombre)
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(0, weight=1)
 
-    tabla = ttk.Treeview(
-        tabla_frame,
-        columns=columnas,
-        show="headings",
-    )
+        control = ttk.Treeview(
+            tab,
+            columns=[clave for clave, titulo in columnas],
+            show="headings",
+            selectmode="browse",
+            height=8,
+        )
 
-    encabezados = {
-        "muestra": "ID muestra",
-        "donacion": "ID donación",
-        "estado": "Estado de muestra",
-        "unidad": "Estado de unidad",
-        "responsable": "Responsable",
-        "fecha": "Fecha de registro",
+        for clave, titulo in columnas:
+            control.heading(clave, text=titulo)
+            control.column(
+                clave,
+                width=175,
+                minwidth=90,
+                anchor="center",
+            )
+
+        vertical = ttk.Scrollbar(
+            tab, orient="vertical", command=control.yview
+        )
+        horizontal = ttk.Scrollbar(
+            tab, orient="horizontal", command=control.xview
+        )
+
+        control.configure(
+            yscrollcommand=vertical.set,
+            xscrollcommand=horizontal.set,
+        )
+
+        control.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+
+        return control
+
+    columnas_muestras = [
+        ("MUESTRA_ID", "ID muestra"),
+        ("DONACION_ID", "ID donación / unidad"),
+        ("DONANTE_ID", "ID donante"),
+        ("TIPO", "Sangre / Rh"),
+        ("AVANCE", "Controles completos"),
+        ("SITUACION", "Situación de la unidad"),
+        ("ESTADO_MUESTRA", "Estado registrado de muestra"),
+        ("INVENTARIO", "Inventario"),
+        ("RESPONSABLE", "Responsable"),
+        ("FECHA_REGISTRO", "Registro de muestra"),
+    ]
+
+    columnas_donaciones = [
+        ("DONACION_ID", "ID donación / unidad"),
+        ("DONANTE_ID", "ID donante"),
+        ("TIPO", "Sangre / Rh"),
+        ("NUM_MUESTRAS", "Muestras registradas"),
+        ("SITUACION", "Situación de la unidad"),
+        ("INVENTARIO", "Inventario"),
+        ("EXTRACCION", "Extracción"),
+        ("VENCIMIENTO", "Vencimiento"),
+    ]
+
+    tablas = {
+        "Muestras": crear_tabla("Muestras", columnas_muestras),
+        "Donaciones": crear_tabla("Donaciones", columnas_donaciones),
+    }
+    columnas = {
+        "Muestras": columnas_muestras,
+        "Donaciones": columnas_donaciones,
     }
 
-    for columna, titulo in encabezados.items():
-        tabla.heading(columna, text=titulo)
-        tabla.column(
-            columna,
-            width=180,
-            minwidth=100,
-            anchor="center",
+    datos = {"MUESTRAS": [], "DONACIONES": []}
+    referencias = {"Muestras": {}, "Donaciones": {}}
+
+    def elegida():
+        nombre = pestanas.get()
+        items = tablas[nombre].selection()
+
+        return (
+            referencias[nombre].get(items[0])
+            if items
+            else None
         )
 
-    tabla.column("muestra", width=100)
-    tabla.column("donacion", width=100)
-    tabla.column("fecha", width=230)
+    def actualizar_seleccion(event=None):
+        fila = elegida()
 
-    barra_vertical = ttk.Scrollbar(
-        tabla_frame,
-        orient="vertical",
-        command=tabla.yview,
-    )
-    barra_horizontal = ttk.Scrollbar(
-        tabla_frame,
-        orient="horizontal",
-        command=tabla.xview,
-    )
+        if fila is None:
+            seleccion.configure(
+                text="Seleccione una fila para trabajar."
+            )
+        else:
+            texto = f"Donación #{fila['DONACION_ID']}"
 
-    tabla.configure(
-        yscrollcommand=barra_vertical.set,
-        xscrollcommand=barra_horizontal.set,
-    )
+            if "MUESTRA_ID" in fila:
+                texto += f" · Muestra #{fila['MUESTRA_ID']}"
 
-    tabla.grid(row=0, column=0, sticky="nsew")
-    barra_vertical.grid(row=0, column=1, sticky="ns")
-    barra_horizontal.grid(row=1, column=0, sticky="ew")
+            seleccion.configure(text=texto)
 
-    def limpiar_resultados():
-        for item in tabla.get_children():
-            tabla.delete(item)
+        boton_resultados.configure(
+            state=(
+                "normal"
+                if fila and pestanas.get() == "Muestras"
+                else "disabled"
+            )
+        )
+        boton_registrar.configure(
+            state="normal" if fila else "disabled"
+        )
 
-    def mostrar_resultados(muestras):
-        limpiar_resultados()
+    def aplicar(event=None):
+        cantidades = []
 
-        for muestra in muestras:
-            fecha = datetime.fromisoformat(
-                muestra["FECHA_REGISTRO"]
-            ).strftime("%d-%m-%Y %H:%M:%S %z")
+        for nombre, clave in (
+            ("Muestras", "MUESTRAS"),
+            ("Donaciones", "DONACIONES"),
+        ):
+            control = tablas[nombre]
 
-            tabla.insert(
-                "",
-                "end",
-                values=(
-                    muestra["ID"],
-                    muestra["DONACION_ID"],
-                    muestra["ESTADO"],
-                    muestra["ESTADO_UNIDAD"],
-                    (
-                        f"{muestra['RESPONSABLE']} "
-                        f"(ID {muestra['REGISTRADA_POR']})"
-                    ),
-                    fecha,
-                ),
+            for item in control.get_children():
+                control.delete(item)
+
+            referencias[nombre] = {}
+
+            filas = filtrar_registros(
+                datos[clave],
+                busqueda.get(),
+                situacion.get(),
+                tipo.get(),
             )
 
-    def informar_error(error):
-        limpiar_resultados()
-        mensaje.configure(
-            text=str(error),
-            text_color="#DC2626",
-        )
+            for fila in filas:
+                valores = []
 
-    def buscar():
-        mensaje.configure(text="")
+                for campo, titulo in columnas[nombre]:
+                    valor = fila.get(campo)
+
+                    if valor and campo == "FECHA_REGISTRO":
+                        valor = datetime.fromisoformat(
+                            valor
+                        ).strftime("%d-%m-%Y %H:%M:%S %z")
+
+                    elif valor and campo in (
+                        "EXTRACCION", "VENCIMIENTO"
+                    ):
+                        try:
+                            valor = datetime.strptime(
+                                valor, "%Y-%m-%d"
+                            ).strftime("%d-%m-%Y")
+                        except ValueError:
+                            pass
+
+                    valores.append(
+                        "—" if valor is None else valor
+                    )
+
+                item = control.insert(
+                    "", "end", values=valores
+                )
+                referencias[nombre][item] = fila
+
+            cantidades.append(f"{nombre}: {len(filas)}")
+
+        mensaje.configure(
+            text=" · ".join(cantidades),
+            text_color=("gray30", "gray80"),
+        )
+        actualizar_seleccion()
+
+    def recargar():
+        nonlocal datos
 
         try:
-            identificador = entrada_busqueda.get()
-
-            if tipo_consulta.get() == "ID de muestra":
-                muestras = [
-                    consultar_muestra(
-                        identificador,
-                        empleado_id,
-                    )
-                ]
-            else:
-                muestras = consultar_muestras_donacion(
-                    identificador,
-                    empleado_id,
-                )
-
-            mostrar_resultados(muestras)
-
+            datos = listar_laboratorio(empleado_id)
+        except (
+            ValueError,
+            PermissionError,
+            sqlite3.Error,
+        ) as error:
+            datos = {"MUESTRAS": [], "DONACIONES": []}
+            aplicar()
             mensaje.configure(
-                text=(
-                    f"Muestras encontradas: {len(muestras)}"
-                    if muestras
-                    else "La donación existe, pero no tiene muestras."
-                ),
-                text_color=("#166534", "#86EFAC"),
+                text=f"No se pudo cargar el listado: {error}",
+                text_color="#DC2626",
             )
+            return
 
-        except (ValueError, PermissionError) as error:
-            informar_error(error)
-        except sqlite3.Error:
-            informar_error(
-                "No se pudo consultar la base de datos."
-            )
+        aplicar()
+
+    def limpiar():
+        busqueda.delete(0, "end")
+        situacion.set("Todas")
+        tipo.set("Todos")
+        aplicar()
+
+    def abrir_resultados(event=None):
+        fila = elegida()
+
+        if pestanas.get() != "Muestras" or fila is None:
+            return
+
+        from pantallas.resultados_analisis import (
+            mostrar_resultados_analisis,
+        )
+
+        mostrar_resultados_analisis(
+            pantalla,
+            fila["MUESTRA_ID"],
+            empleado_id,
+        )
 
     def registrar():
-        donacion_id = entrada_donacion.get().strip()
+        fila = elegida()
 
-        if not donacion_id:
-            informar_error("Ingrese el ID de la donación.")
+        if fila is None:
             return
+
+        donacion_id = fila["DONACION_ID"]
 
         confirmado = messagebox.askyesno(
             "Registrar muestra",
             (
-                f"¿Registrar una muestra para la donación "
-                f"#{donacion_id}?\n\n"
-                "La unidad quedará pendiente de análisis "
-                "y fuera del stock disponible."
+                f"¿Registrar una nueva muestra para "
+                f"la donación #{donacion_id}?\n\n"
+                "La unidad quedará pendiente y fuera "
+                "del stock disponible."
             ),
             parent=frame,
         )
@@ -238,81 +319,82 @@ def mostrar_muestras(pantalla, empleado_id):
             return
 
         try:
-            muestra = registrar_muestra(
-                donacion_id,
-                empleado_id,
+            nueva = registrar_muestra(
+                donacion_id, empleado_id
             )
-        except (ValueError, PermissionError) as error:
-            informar_error(error)
-            return
-        except sqlite3.Error:
-            informar_error(
-                "No se pudo registrar la muestra. "
-                "La operación no fue completada."
-            )
-            return
-
-        # El registro ya quedó confirmado en la base.
-        mostrar_resultados([muestra])
-
-        mensaje.configure(
-            text=(
-                f"Muestra #{muestra['ID']} registrada para "
-                f"la donación #{muestra['DONACION_ID']}. "
-                "Estado: Pendiente de análisis."
-            ),
-            text_color=("#166534", "#86EFAC"),
-        )
-
-        tipo_consulta.set("ID de donación")
-        entrada_busqueda.delete(0, "end")
-        entrada_busqueda.insert(
-            0, str(muestra["DONACION_ID"])
-        )
-        entrada_donacion.delete(0, "end")
-
-    ctk.CTkButton(
-        formulario,
-        text="Registrar muestra",
-        command=registrar,
-    ).grid(row=0, column=2, padx=15, pady=15)
-
-    ctk.CTkButton(
-        consulta,
-        text="Consultar",
-        command=buscar,
-    ).grid(row=0, column=2, padx=15, pady=15)
-    def abrir_resultados():
-        seleccion = tabla.selection()
-
-        if not seleccion:
+        except (
+            ValueError,
+            PermissionError,
+            sqlite3.Error,
+        ) as error:
             mensaje.configure(
-                text="Seleccione una muestra en la tabla.",
+                text=str(error),
                 text_color="#DC2626",
             )
             return
 
-        valores = tabla.item(seleccion[0], "values")
-        muestra_id = int(valores[0])
+        limpiar()
+        recargar()
+        pestanas.set("Muestras")
 
-        from pantallas.resultados_analisis import (
-            mostrar_resultados_analisis,
+        for item, registro in referencias["Muestras"].items():
+            if registro["MUESTRA_ID"] == nueva["ID"]:
+                tablas["Muestras"].selection_set(item)
+                tablas["Muestras"].see(item)
+                break
+
+        actualizar_seleccion()
+        mensaje.configure(
+            text=(
+                f"Muestra #{nueva['ID']} registrada para "
+                f"donación #{donacion_id}."
+            ),
+            text_color=("#166534", "#86EFAC"),
         )
 
-        mostrar_resultados_analisis(
-            pantalla,
-            muestra_id,
-            empleado_id,
-        )
+    boton_resultados = ctk.CTkButton(
+        pie,
+        text="Abrir resultados",
+        command=abrir_resultados,
+        state="disabled",
+    )
+    boton_resultados.pack(side="right", padx=5)
+
+    boton_registrar = ctk.CTkButton(
+        pie,
+        text="Registrar nueva muestra",
+        command=registrar,
+        state="disabled",
+    )
+    boton_registrar.pack(side="right", padx=5)
 
     ctk.CTkButton(
-        consulta,
-        text="Resultados de la muestra",
-        command=abrir_resultados,
-    ).grid(row=0, column=3, padx=15, pady=15)
-    
-    entrada_busqueda.bind(
-        "<Return>", lambda evento: buscar()
+        filtros,
+        text="Limpiar filtros",
+        command=limpiar,
+        width=110,
+    ).grid(row=0, column=3, padx=5)
+
+    ctk.CTkButton(
+        filtros,
+        text="Actualizar",
+        command=recargar,
+        width=100,
+    ).grid(row=0, column=4, padx=5)
+
+    situacion.configure(command=lambda valor: aplicar())
+    tipo.configure(command=lambda valor: aplicar())
+    busqueda.bind("<KeyRelease>", aplicar)
+    pestanas.configure(command=actualizar_seleccion)
+
+    for control in tablas.values():
+        control.bind(
+            "<<TreeviewSelect>>",
+            actualizar_seleccion,
+        )
+
+    tablas["Muestras"].bind(
+        "<Double-1>", abrir_resultados
     )
 
-    entrada_donacion.focus_set()
+    recargar()
