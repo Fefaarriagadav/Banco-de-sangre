@@ -610,13 +610,13 @@ def mostrar_resultados_analisis(pantalla, muestra_id, empleado_id):
             acciones_informe,
             text="Guardar informe",
             command=guardar_todo,
-        ).pack(side="left", padx=10, pady=8)
+        ).pack(side="right", padx=10, pady=8)
 
         ctk.CTkButton(
             acciones_informe,
             text="Cancelar",
             command=ventana.destroy,
-        ).pack(side="right", padx=10, pady=8)
+        ).pack(side="left", padx=10, pady=8)
 
     def guardar():
         analisis_id = analisis_por_etiqueta.get(selector.get())

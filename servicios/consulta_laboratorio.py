@@ -2,6 +2,7 @@
 
 from datos.configuracion import RUTA_BD
 from servicios.muestras import conectar, validar_enfermero
+from servicios.vencimientos import fecha_actual, validar_fecha
 
 
 SITUACIONES = (
@@ -12,7 +13,6 @@ SITUACIONES = (
     "Pendiente de autorización",
     "Bloqueada",
     "Liberada",
-    "Vencida",
     "Usada",
     "Descartada",
     "Reservada",
@@ -180,9 +180,32 @@ def listar_laboratorio(empleado_id, ruta=RUTA_BD):
             }
         )
 
+    hoy = fecha_actual()
+
+    def esta_vigente(fila):
+        if fila["INVENTARIO"] == "Vencida":
+            return False
+
+        try:
+            vencimiento = validar_fecha(
+                fila["VENCIMIENTO"], "%Y-%m-%d"
+            )
+        except ValueError:
+            # Una fecha incorrecta requiere revisión;
+            # no demuestra que la unidad esté vencida.
+            return True
+
+        return vencimiento >= hoy
+
     return {
-        "MUESTRAS": muestras,
-        "DONACIONES": unidades,
+        "MUESTRAS": [
+            fila for fila in muestras
+            if esta_vigente(fila)
+        ],
+        "DONACIONES": [
+            fila for fila in unidades
+            if esta_vigente(fila)
+        ],
     }
 
 

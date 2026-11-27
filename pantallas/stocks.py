@@ -31,15 +31,33 @@ def mostrar_stocks(pantalla):
     resumen.pack(pady=5)
 
     estilo = ttk.Style(frame)
+    estilo.theme_use("clam")
+
     estilo.configure(
         "Stocks.Treeview",
-        rowheight=28,
+        background="#282D35",
+        fieldbackground="#282D35",
+        foreground="#E5E7EB",
+        rowheight=32,
         font=("Arial", 11),
+        borderwidth=0,
+        relief="flat",
     )
+
     estilo.configure(
         "Stocks.Treeview.Heading",
+        background="#E2E8F0",
+        foreground="#172033",
         font=("Arial", 11, "bold"),
+        padding=(8, 10),
     )
+
+    estilo.map(
+        "Stocks.Treeview",
+        background=[("selected", "#24577A")],
+        foreground=[("selected", "#FFFFFF")],
+    )
+
 
     def crear_tabla(contenedor, columnas, alto):
         caja = ctk.CTkFrame(contenedor)
@@ -86,14 +104,56 @@ def mostrar_stocks(pantalla):
 
         return tabla
 
+    contenido = ctk.CTkFrame(
+        frame, fg_color="transparent"
+    )
+    contenido.pack(
+        fill="both", expand=True, padx=10, pady=5
+    )
+    contenido.grid_columnconfigure(
+        0, weight=3, uniform="stock"
+    )
+    contenido.grid_columnconfigure(
+        1, weight=2, uniform="stock"
+    )
+    contenido.grid_rowconfigure(0, weight=1)
+
+    izquierda = ctk.CTkFrame(
+        contenido,
+        fg_color="#242424",
+        corner_radius=12,
+        border_width=1,
+        border_color="#3A3A3A",
+    )
+    izquierda.grid(
+        row=0, column=0, sticky="nsew", padx=(0, 8)
+    )
+
+    derecha = ctk.CTkFrame(
+        contenido,
+        fg_color="#242424",
+        corner_radius=12,
+        border_width=1,
+        border_color="#5A4930",
+    )
+    derecha.grid(
+        row=0, column=1, sticky="nsew", padx=(8, 0)
+    )
+
     ctk.CTkLabel(
-        frame,
+        izquierda,
         text="Totales por tipo de sangre",
         font=("Arial", 17, "bold"),
     ).pack(pady=(10, 0))
 
+    ctk.CTkLabel(
+        izquierda,
+        text="Unidades liberadas y disponibles para despacho",
+        text_color="#AAB4C3",
+    ).pack(pady=5)
+
     tabla_totales = crear_tabla(
-        frame,
+        izquierda,
         [
             ("grupo", "Grupo sanguíneo"),
             ("rh", "Factor Rh"),
@@ -105,13 +165,13 @@ def mostrar_stocks(pantalla):
     )
 
     ctk.CTkLabel(
-        frame,
+        izquierda,
         text="Detalle de unidades disponibles",
         font=("Arial", 17, "bold"),
     ).pack(pady=(10, 0))
 
     tabla_unidades = crear_tabla(
-        frame,
+        izquierda,
         [
             ("id", "ID unidad"),
             ("grupo", "Grupo sanguíneo"),
@@ -121,6 +181,32 @@ def mostrar_stocks(pantalla):
             ("vencimiento", "Fecha de vencimiento"),
         ],
         alto=6,
+    )
+
+    ctk.CTkLabel(
+        derecha,
+        text="Stock en revisión",
+        font=("Arial", 17, "bold"),
+    ).pack(pady=(10, 0))
+
+    ctk.CTkLabel(
+        derecha,
+        text=(
+            "Unidades pendientes"
+            " · No disponibles para despacho"
+        ),
+        wraplength=350,
+    ).pack(pady=5)
+
+    tabla_revision = crear_tabla(
+        derecha,
+        [
+            ("id", "ID unidad"),
+            ("sangre", "Sangre / Rh"),
+            ("estado", "Situación"),
+            ("vencimiento", "Vencimiento"),
+        ],
+        alto=14,
     )
 
     pie = ctk.CTkLabel(frame, text="")
@@ -134,7 +220,11 @@ def mostrar_stocks(pantalla):
         ).strftime("%d-%m-%Y")
 
     def limpiar_tablas():
-        for tabla in (tabla_totales, tabla_unidades):
+        for tabla in (
+            tabla_totales,
+            tabla_unidades,
+            tabla_revision,
+        ):
             for item in tabla.get_children():
                 tabla.delete(item)
 
@@ -183,6 +273,26 @@ def mostrar_stocks(pantalla):
                 ),
             )
 
+        for unidad in datos.get("revision", []):
+            situacion = (
+                unidad["ESTADO_LABORATORIO"]
+                if unidad["ESTADO"] == "Disponible"
+                else unidad["ESTADO"]
+            )
+
+            tabla_revision.insert(
+                "",
+                "end",
+                values=(
+                    unidad["ID"],
+                    f"{unidad['GRUPO']}{unidad['RH']}",
+                    situacion,
+                    formatear_fecha(
+                        unidad["VENCIMIENTO"]
+                    ),
+                ),
+            )
+
         cantidad = len(datos["unidades"])
         litros = sum(
             total["litros"] for total in datos["totales"]
@@ -192,6 +302,8 @@ def mostrar_stocks(pantalla):
             text=(
                 f"Total disponible: {cantidad} unidades"
                 f" · {litros:.2f} litros"
+                f" | En revisión: "
+                f"{len(datos.get('revision', []))} unidades"
             ),
             text_color=("#111827", "#F9FAFB"),
         )

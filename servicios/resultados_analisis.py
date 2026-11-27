@@ -418,6 +418,16 @@ def _guardar_resultado_en_conexion(
         ),
     )
 
+    if clasificacion == "No conforme":
+        _inhabilitar_donante_por_tamizaje(
+            conexion,
+            muestra_id,
+            resultado_id,
+            version,
+            empleado_id,
+            instante,
+        )
+
     if not actualizar_estado:
         return None
 
@@ -634,3 +644,147 @@ def guardar_informe(
             )
 
         return _consultar(conexion, muestra_id)
+
+def _inhabilitar_donante_por_tamizaje(
+    conexion,
+    muestra_id,
+    resultado_id,
+    version,
+    empleado_id,
+    instante,
+):
+    """Participa en la misma transacción que guarda el resultado."""
+    from servicios.elegibilidad import TEMPORAL, PERMANENTE
+
+    datos = conexion.execute(
+        """
+        SELECT
+            a.CODIGO,
+            r.CLASIFICACION,
+            d.ID AS DONACION_ID,
+            d.DONANTE AS DONANTE_ID,
+            p.ID AS PERSONA_ID,
+            p.ELEGIBLE,
+            p.INHABILITACION_INICIO AS INICIO,
+            p.INHABILITACION_FIN AS FIN
+        FROM RESULTADOS_ANALISIS AS r
+        JOIN CATALOGO_ANALISIS AS a
+            ON a.ID = r.ANALISIS_ID
+        JOIN MUESTRAS AS m
+            ON m.ID = r.MUESTRA_ID
+        JOIN DONACIONES AS d
+            ON d.ID = m.DONACION_ID
+        LEFT JOIN DONANTES AS p
+            ON p.ID = d.DONANTE
+        WHERE r.ID = ?
+          AND m.ID = ?
+          AND r.VERSION = ?
+        """,
+        (resultado_id, muestra_id, version),
+    ).fetchone()
+
+    controles = {
+        "VIH_1_2",
+        "HEPATITIS_B",
+        "HEPATITIS_C",
+        "HTLV_1_2",
+        "CHAGAS",
+        "SIFILIS",
+    }
+
+    if datos is None:
+        raise ValueError(
+            "No se pudo vincular el resultado con su donación."
+        )
+
+    if (
+        datos["CODIGO"] not in controles
+        or datos["CLASIFICACION"] != "No conforme"
+    ):
+        return
+
+    if datos["PERSONA_ID"] is None:
+        raise ValueError(
+            "La donación no tiene un donante válido asociado."
+        )
+
+    ya_registrado = conexion.execute(
+        """
+        SELECT 1
+        FROM HISTORIAL_HABILITACION
+        WHERE RESULTADO_ID = ?
+          AND RESULTADO_VERSION = ?
+        """,
+        (resultado_id, version),
+    ).fetchone()
+
+    if ya_registrado:
+        return
+
+    anterior = datos["ELEGIBLE"]
+
+    if anterior == PERMANENTE:
+        nuevo = PERMANENTE
+        inicio = datos["INICIO"]
+        fin = datos["FIN"]
+
+    else:
+        nuevo = TEMPORAL
+        inicio = (
+            datos["INICIO"]
+            if anterior == TEMPORAL and datos["INICIO"]
+            else instante.date().isoformat()
+        )
+        fin = None
+
+        conexion.execute(
+            """
+            UPDATE DONANTES
+            SET ELEGIBLE = ?,
+                INHABILITACION_INICIO = ?,
+                INHABILITACION_FIN = ?
+            WHERE ID = ?
+            """,
+            (nuevo, inicio, fin, datos["DONANTE_ID"]),
+        )
+
+    motivo = (
+        f"Tamizaje positivo/No conforme: {datos['CODIGO']}. "
+        f"Donación #{datos['DONACION_ID']}, "
+        f"muestra #{muestra_id}. "
+        "Requiere revisión; no constituye diagnóstico confirmado. "
+        f"Restricción previa: inicio={datos['INICIO']}, "
+        f"fin={datos['FIN']}."
+    )
+
+    conexion.execute(
+        """
+        INSERT INTO HISTORIAL_HABILITACION (
+            DONANTE_ID,
+            ESTADO_ANTERIOR,
+            ESTADO_NUEVO,
+            FECHA_INICIO,
+            FECHA_FIN,
+            EMPLEADO_ID,
+            FECHA_CAMBIO,
+            MOTIVO,
+            MUESTRA_ID,
+            RESULTADO_ID,
+            RESULTADO_VERSION
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            datos["DONANTE_ID"],
+            anterior,
+            nuevo,
+            inicio,
+            fin,
+            empleado_id,
+            instante.isoformat(timespec="microseconds"),
+            motivo,
+            muestra_id,
+            resultado_id,
+            version,
+        ),
+    )

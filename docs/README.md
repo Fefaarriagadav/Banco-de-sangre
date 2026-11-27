@@ -564,3 +564,29 @@ python -m unittest discover -s "tests/Sprint 1" -v
 python -m unittest discover -s "tests/Sprint 2" -v
 git diff --check
 ```
+
+#### Ajustes posteriores a la revisión con el PO
+
+- Botón «Guardar informe» ubicado a la derecha.
+- Pantalla de stock con disponibles a la izquierda y unidades
+  en revisión a la derecha, sin mezclarlas con el stock disponible.
+- Exclusión de unidades vencidas y sus muestras del listado
+  operativo de laboratorio, conservando sus datos e historial.
+- Inhabilitación temporal automática del donante al guardar
+  un resultado No conforme en los controles de tamizaje configurados.
+- La restricción queda sin fecha de término, pendiente de revisión.
+  Se conserva cualquier inhabilitación permanente existente.
+- Un resultado negativo posterior no rehabilita automáticamente
+  al donante: requiere revisión y habilitación manual autorizada.
+- El historial identifica responsable, motivo, muestra,
+  resultado y versión que originaron la restricción.
+- Resultado, inhabilitación e historiales se guardan dentro
+  de la misma transacción.
+
+Al incorporar estos cambios, con la aplicación cerrada y la base
+respaldada, ejecutar una vez para actualizar su estructura:
+
+python -c "from datos.basededatos import inicializar_base; inicializar_base()"
+
+La inhabilitación automática se aplica al guardar resultados nuevos
+o nuevas versiones; no procesa retrospectivamente resultados anteriores.

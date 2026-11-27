@@ -400,6 +400,39 @@ def consultar_stock_detallado(ruta=RUTA_BD, ahora=None):
             (DISPONIBLE, hoy.isoformat()),
         ).fetchall()
 
+        filas_revision = conexion.execute(
+            """
+            SELECT
+                u.ID,
+                COALESCE(
+                    u.TIPO_SANGRE, d.GRUPO_SANGUINEO, '?'
+                ) AS GRUPO,
+                COALESCE(u.FACTOR_RH, d.FACTOR_RH, '?') AS RH,
+                u.CANTIDAD,
+                u.FECHA_EXTRACCIÓN AS EXTRACCION,
+                u.FECHA_VENCIMIENTO AS VENCIMIENTO,
+                u.ESTADO,
+                u.ESTADO_LABORATORIO
+            FROM DONACIONES AS u
+            LEFT JOIN DONANTES AS d ON d.ID = u.DONANTE
+            WHERE u.ESTADO IN (?, ?, ?)
+              AND COALESCE(u.ESTADO_LABORATORIO, '') != 'Bloqueada'
+              AND (
+                  u.ESTADO != ?
+                  OR COALESCE(u.ESTADO_LABORATORIO, '') != 'Liberada'
+              )
+              AND u.FECHA_VENCIMIENTO >= ?
+            ORDER BY u.FECHA_VENCIMIENTO, u.ID
+            """,
+            (
+                DISPONIBLE,
+                PENDIENTE,
+                "Pendiente de análisis",
+                DISPONIBLE,
+                hoy.isoformat(),
+            ),
+        ).fetchall()
+
     totales = {
         (grupo, rh): {
             "grupo": grupo,
@@ -439,6 +472,7 @@ def consultar_stock_detallado(ruta=RUTA_BD, ahora=None):
     return {
         "totales": list(totales.values()),
         "unidades": unidades,
+        "revision": [dict(fila) for fila in filas_revision],
     }
 
 def iniciar_actualizacion(widget, ruta=RUTA_BD):

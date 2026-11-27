@@ -75,6 +75,33 @@ def inicializar_base(ruta=RUTA_BD):
     migrar_muestras(conexion)
     migrar_resultados(conexion)
     migrar_liberacion(conexion)
+    columnas_historial = {
+        fila[1]
+        for fila in conexion.execute(
+            "PRAGMA table_info(HISTORIAL_HABILITACION)"
+        )
+    }
+
+    campos_laboratorio = (
+        ("MOTIVO", "TEXT NOT NULL DEFAULT ''"),
+        (
+            "MUESTRA_ID",
+            "INTEGER REFERENCES MUESTRAS(ID)",
+        ),
+        (
+            "RESULTADO_ID",
+            "INTEGER REFERENCES RESULTADOS_ANALISIS(ID)",
+        ),
+        ("RESULTADO_VERSION", "INTEGER"),
+    )
+
+    for nombre, definicion in campos_laboratorio:
+        if nombre not in columnas_historial:
+            conexion.execute(
+                f"ALTER TABLE HISTORIAL_HABILITACION "
+                f"ADD COLUMN {nombre} {definicion}"
+            )
+
 
     conexion.commit() # guarda los cambios en la base de datos
     conexion.close() # cierra la conexión con la base de datos
